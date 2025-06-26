@@ -349,6 +349,7 @@ button.disabled {
     position: relative;
     height: 350px;
     padding: 1rem;
+    width: 100%;
 }
 
 .result-image {
@@ -360,6 +361,7 @@ button.disabled {
 canvas {
     width: 100% !important;
     height: 100% !important;
+    max-height: 100%;
 }
 
 /* Explicaciones */
@@ -384,6 +386,23 @@ canvas {
     font-weight: bold;
 }
 
+.expand-chart-btn {
+    position: absolute;
+    top: 0.8rem;
+    right: 3rem;
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 5px;
+    transition: transform 0.2s;
+}
+
+.expand-chart-btn:hover {
+    transform: scale(1.2);
+}
+
 .explanation-text {
     display: none;
     position: absolute;
@@ -392,7 +411,7 @@ canvas {
     width: 300px;
     background-color: white;
     border-radius: 4px;
-    padding: 1rem;
+    padding: 1.5rem;
     box-shadow: var(--shadow);
     z-index: 10;
     border-left: 4px solid var(--secondary-color);
@@ -494,4 +513,71 @@ footer {
     select {
         width: 100%;
     }
+}
+
+/* Modal Styles */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.7);
+    padding: 2rem;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 1200px;
+    height: 90vh;
+    border-radius: 8px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-chart-container {
+    flex-grow: 1;
+    position: relative;
+    width: 100%;
+    height: calc(100% - 40px);
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 25px;
+    font-size: 35px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+}
+
+.equation {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+    text-align: center;
+    font-size: 1.2rem;
 } 

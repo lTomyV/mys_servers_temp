@@ -11,6 +11,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Chart.js annotation plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <!-- Chart.js zoom plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <!-- heatmap.js para mapa de calor -->
     <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
 </head>
@@ -69,7 +71,10 @@
                 <div class="result-card">
                     <h3>Curvas COP de Refrigeración</h3>
                     <div class="chart-container">
-                        <img id="cop-curves" class="result-image" alt="Curvas COP">
+                        <canvas id="cop-curves-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="cop-curves-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
                         <div class="explanation-trigger" data-target="cop-curves-explanation">
                             <span class="info-icon">i</span>
                         </div>
@@ -82,7 +87,10 @@
                 <div class="result-card">
                     <h3>Diagnóstico de Randomización</h3>
                     <div class="chart-container">
-                        <img id="randomization-diagnostic" class="result-image" alt="Diagnóstico de Randomización">
+                        <canvas id="randomization-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="randomization-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
                         <div class="explanation-trigger" data-target="randomization-explanation">
                             <span class="info-icon">i</span>
                         </div>
@@ -95,7 +103,10 @@
                 <div class="result-card">
                     <h3>Distribución de Temperaturas Horarias</h3>
                     <div class="chart-container">
-                        <img id="temperature-distribution" class="result-image" alt="Distribución de Temperaturas Horarias">
+                        <canvas id="hourly-temp-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="hourly-temp-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
                         <div class="explanation-trigger" data-target="temperature-distribution-explanation">
                             <span class="info-icon">i</span>
                         </div>
@@ -109,6 +120,9 @@
                     <h3>Histograma de Costos - Línea Base</h3>
                     <div class="chart-container">
                         <canvas id="baseline-histogram"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="baseline-histogram">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
                         <div class="explanation-trigger" data-target="cost-baseline-explanation">
                             <span class="info-icon">i</span>
                         </div>
@@ -122,6 +136,9 @@
                     <h3>Histograma de Costos - Optimizado</h3>
                     <div class="chart-container">
                         <canvas id="optimized-histogram"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="optimized-histogram">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
                         <div class="explanation-trigger" data-target="cost-optimized-explanation">
                             <span class="info-icon">i</span>
                         </div>
@@ -193,6 +210,16 @@
     <footer>
         <p>&copy; 2025 Simulación de Servidores - Análisis Monte Carlo</p>
     </footer>
+
+    <!-- Modal para gráficos expandidos -->
+    <div id="chart-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div class="modal-chart-container">
+                <canvas id="modal-chart"></canvas>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/scripts_new.js') }}"></script>
 </body>

@@ -270,156 +270,50 @@ def calculate_temperature_statistics(temp_profiles):
         'max_hour': int(max_hour)
     }
 
-# Función para generar gráfico de diagnóstico de randomización
-def generate_randomization_diagnostic(temp_profiles):
-    """Genera un gráfico de diagnóstico de randomización."""
-    # Extraer temperaturas mínimas y máximas de los perfiles
+# Funciones para preparar datos de gráficos (reemplazan a las funciones que generaban imágenes)
+def get_randomization_diagnostic_data(temp_profiles):
+    """Prepara datos para el gráfico de diagnóstico de randomización."""
+    if not temp_profiles:
+        return {'t_mins': [], 't_maxs': []}
+    
     t_mins = []
     t_maxs = []
-    
     for profile in temp_profiles:
         t_mins.extend(profile['T_min'])
         t_maxs.extend(profile['T_max'])
     
-    # Convertir a Celsius
-    t_mins = np.array(t_mins) - 273.15
-    t_maxs = np.array(t_maxs) - 273.15
+    t_mins_c = (np.array(t_mins) - 273.15).tolist()
+    t_maxs_c = (np.array(t_maxs) - 273.15).tolist()
     
-    # Crear figura
-    fig = Figure(figsize=(10, 8))
-    
-    # Subplot para T_min
-    ax1 = fig.add_subplot(2, 2, 1)
-    ax1.hist(t_mins, bins=20, alpha=0.7, color='blue')
-    ax1.set_title('Distribución de Temperaturas Mínimas')
-    ax1.set_xlabel('Temperatura (°C)')
-    ax1.set_ylabel('Frecuencia')
-    
-    # Ajustar distribución normal a T_min
-    mu_min, std_min = norm.fit(t_mins)
-    x_min = np.linspace(min(t_mins), max(t_mins), 100)
-    p_min = norm.pdf(x_min, mu_min, std_min) * len(t_mins) * (max(t_mins) - min(t_mins)) / 20
-    ax1.plot(x_min, p_min, 'r--', linewidth=2)
-    ax1.text(0.05, 0.95, f'μ = {mu_min:.2f}, σ = {std_min:.2f}', 
-             transform=ax1.transAxes, fontsize=10, verticalalignment='top')
-    
-    # Subplot para T_max
-    ax2 = fig.add_subplot(2, 2, 2)
-    ax2.hist(t_maxs, bins=20, alpha=0.7, color='red')
-    ax2.set_title('Distribución de Temperaturas Máximas')
-    ax2.set_xlabel('Temperatura (°C)')
-    ax2.set_ylabel('Frecuencia')
-    
-    # Ajustar distribución normal a T_max
-    mu_max, std_max = norm.fit(t_maxs)
-    x_max = np.linspace(min(t_maxs), max(t_maxs), 100)
-    p_max = norm.pdf(x_max, mu_max, std_max) * len(t_maxs) * (max(t_maxs) - min(t_maxs)) / 20
-    ax2.plot(x_max, p_max, 'r--', linewidth=2)
-    ax2.text(0.05, 0.95, f'μ = {mu_max:.2f}, σ = {std_max:.2f}', 
-             transform=ax2.transAxes, fontsize=10, verticalalignment='top')
-    
-    # Subplot para Q-Q plot de T_min
-    ax3 = fig.add_subplot(2, 2, 3)
-    from scipy.stats import probplot
-    probplot(t_mins, dist="norm", plot=ax3)
-    ax3.set_title('Q-Q Plot Temperaturas Mínimas')
-    
-    # Subplot para Q-Q plot de T_max
-    ax4 = fig.add_subplot(2, 2, 4)
-    probplot(t_maxs, dist="norm", plot=ax4)
-    ax4.set_title('Q-Q Plot Temperaturas Máximas')
-    
-    fig.tight_layout()
-    
-    # Convertir figura a imagen base64
-    buf = io.BytesIO()
-    FigureCanvas(fig).print_png(buf)
-    data = base64.b64encode(buf.getbuffer()).decode('ascii')
-    
-    return f"data:image/png;base64,{data}"
+    return {'t_mins': t_mins_c, 't_maxs': t_maxs_c}
 
-# Función para generar gráfico de distribución de temperaturas horarias
-def generate_hourly_temperature_distribution(temp_stats):
-    """Genera un gráfico de distribución de temperaturas horarias."""
-    hourly_means = temp_stats['hourly_means']
-    
-    # Crear figura
-    fig = Figure(figsize=(10, 6))
-    ax = fig.add_subplot(1, 1, 1)
-    
-    # Graficar distribución horaria
-    hours = np.arange(24)
-    ax.plot(hours, hourly_means, 'o-', linewidth=2, markersize=8)
-    ax.set_title('Distribución de Temperaturas Medias por Hora')
-    ax.set_xlabel('Hora del Día')
-    ax.set_ylabel('Temperatura Media (°C)')
-    ax.set_xticks(np.arange(0, 24, 2))
-    ax.grid(True, linestyle='--', alpha=0.7)
-    
-    # Resaltar horas extremas
-    min_hour = temp_stats['min_hour']
-    max_hour = temp_stats['max_hour']
-    ax.plot(min_hour, hourly_means[min_hour], 'bo', markersize=10, label=f'Mínima ({min_hour}:00, {hourly_means[min_hour]:.2f}°C)')
-    ax.plot(max_hour, hourly_means[max_hour], 'ro', markersize=10, label=f'Máxima ({max_hour}:00, {hourly_means[max_hour]:.2f}°C)')
-    
-    # Añadir rango de temperatura
-    ax.fill_between(hours, hourly_means, min(hourly_means), alpha=0.2, color='blue')
-    
-    # Añadir etiquetas con información
-    ax.text(0.02, 0.95, f'Rango diario: {min(hourly_means):.2f}°C - {max(hourly_means):.2f}°C', 
-            transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
-    ax.legend()
-    fig.tight_layout()
-    
-    # Convertir figura a imagen base64
-    buf = io.BytesIO()
-    FigureCanvas(fig).print_png(buf)
-    data = base64.b64encode(buf.getbuffer()).decode('ascii')
-    
-    return f"data:image/png;base64,{data}"
+def get_hourly_temperature_distribution_data(temp_stats):
+    """Prepara datos para el gráfico de distribución de temperaturas horarias."""
+    return {
+        'hourly_means': temp_stats['hourly_means'],
+        'min_hour': temp_stats['min_hour'],
+        'max_hour': temp_stats['max_hour']
+    }
 
-# Función para generar gráfico de curvas COP
-def generate_cop_curves():
-    """Genera un gráfico comparativo de las curvas COP de diferentes modelos de refrigeración."""
-    # Crear figura
-    fig = Figure(figsize=(10, 6))
-    ax = fig.add_subplot(1, 1, 1)
+def get_cop_curves_data():
+    """Prepara datos para el gráfico de curvas COP."""
+    temps = np.linspace(15, 45, 100).tolist()
+    curves = {}
     
-    # Temperaturas para evaluar
-    temps = np.linspace(15, 45, 100)
-    
-    # Colores para cada modelo
     colors = {
-        'economico': 'blue',
-        'eficiente': 'green',
-        'premium': 'red'
+        'economico': 'rgba(54, 162, 235, 0.8)',
+        'eficiente': 'rgba(75, 192, 192, 0.8)',
+        'premium': 'rgba(255, 99, 132, 0.8)'
     }
     
-    # Graficar curvas COP
     for modelo, datos in MODELOS_REFRIGERACION.items():
-        cops = [datos['cop_curve'](t) for t in temps]
-        ax.plot(temps, cops, '-', color=colors[modelo], linewidth=2, label=f"{datos['nombre']} (COP nominal: {datos['cop_nominal']})")
-    
-    ax.set_title('Curvas COP vs Temperatura Exterior')
-    ax.set_xlabel('Temperatura Exterior (°C)')
-    ax.set_ylabel('COP (Coefficient of Performance)')
-    ax.grid(True, linestyle='--', alpha=0.7)
-    ax.legend()
-    
-    # Añadir información adicional
-    ax.text(0.02, 0.05, 'Mayor COP = Mayor eficiencia energética', 
-            transform=ax.transAxes, fontsize=10, verticalalignment='bottom', 
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
-    fig.tight_layout()
-    
-    # Convertir figura a imagen base64
-    buf = io.BytesIO()
-    FigureCanvas(fig).print_png(buf)
-    data = base64.b64encode(buf.getbuffer()).decode('ascii')
-    
-    return f"data:image/png;base64,{data}"
+        curves[modelo] = {
+            'nombre': datos['nombre'],
+            'cops': [datos['cop_curve'](t) for t in temps],
+            'color': colors.get(modelo, 'rgba(201, 203, 207, 0.8)')
+        }
+        
+    return {'temps': temps, 'curves': curves}
 
 # Variable global para almacenar resultados de simulación en curso
 simulation_results = None
@@ -443,15 +337,15 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     # Análisis de temperaturas
     temp_stats = calculate_temperature_statistics(temp_profiles_baseline)
     
-    # Generar gráficos
-    randomization_diagnostic = generate_randomization_diagnostic(temp_profiles_baseline)
-    hourly_temp_distribution = generate_hourly_temperature_distribution(temp_stats)
-    cop_curves = generate_cop_curves()
+    # Generar datos para los gráficos
+    randomization_data = get_randomization_diagnostic_data(temp_profiles_baseline)
+    hourly_temp_data = get_hourly_temperature_distribution_data(temp_stats)
+    cop_curves_data = get_cop_curves_data()
     
     # Calcular mejora porcentual
     improvement = {
-        'mean': round((1 - optimized_stats['mean'] / baseline_stats['mean']) * 100, 2),
-        'costo90': round((1 - optimized_stats['costo90'] / baseline_stats['costo90']) * 100, 2)
+        'mean': round((1 - optimized_stats['mean'] / baseline_stats['mean']) * 100, 2) if baseline_stats['mean'] > 0 else 0,
+        'costo90': round((1 - optimized_stats['costo90'] / baseline_stats['costo90']) * 100, 2) if baseline_stats['costo90'] > 0 else 0
     }
     
     # Generar datos horarios para el heatmap
@@ -488,9 +382,9 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'baseline_stats': baseline_stats,
         'optimized_stats': optimized_stats,
         'improvement': improvement,
-        'randomization_diagnostic': randomization_diagnostic,
-        'hourly_temp_distribution': hourly_temp_distribution,
-        'cop_curves': cop_curves,
+        'randomization_data': randomization_data,
+        'hourly_temp_data': hourly_temp_data,
+        'cop_curves_data': cop_curves_data,
         'simulation_time': round(time.time() - start_time, 2),
         'modelo_refrigeracion': modelo_info_serializable,
         'status': 'complete'

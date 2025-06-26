@@ -3,6 +3,62 @@ let simulationRunning = false;
 let statusCheckInterval = null;
 let chartInstances = {};
 
+// Configuración por defecto para los gráficos
+const defaultChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+        mode: 'index',
+        intersect: false,
+    },
+    plugins: {
+        legend: {
+            position: 'top',
+            labels: {
+                boxWidth: 15,
+                font: {
+                    size: 11
+                }
+            }
+        },
+        tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+                label: function(context) {
+                    let label = context.dataset.label || '';
+                    if (label) {
+                        label += ': ';
+                    }
+                    if (context.parsed.y !== null) {
+                        label += context.parsed.y.toFixed(2);
+                    }
+                    return label;
+                }
+            }
+        }
+    },
+    scales: {
+        x: {
+            grid: {
+                display: false
+            },
+            ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+                font: {
+                    size: 10
+                }
+            }
+        },
+        y: {
+            grid: {
+                color: '#e0e0e0'
+            }
+        }
+    }
+};
+
 // Función para inicializar la página
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Documento cargado, inicializando...");
@@ -21,6 +77,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Mostrar explicaciones al hacer hover
     setupExplanationHovers();
+    
+    // Modal
+    initModal();
 });
 
 // Inicializar selector de modelo de refrigeración
@@ -255,7 +314,7 @@ function displayResults(data) {
     updateStatistics(data);
     
     // Actualizar gráficos
-    updateCharts(data);
+    updateAllCharts(data);
     
     // Mostrar tiempo de simulación
     const simulationTime = document.getElementById('simulation-time');
@@ -356,167 +415,285 @@ function updateStatistics(data) {
     }
 }
 
-// Actualizar gráficos
-function updateCharts(data) {
-    // Actualizar gráfico de diagnóstico de randomización
-    if (data.randomization_diagnostic) {
-        const randomizationImg = document.getElementById('randomization-diagnostic');
-        if (randomizationImg) {
-            randomizationImg.src = data.randomization_diagnostic;
-        }
-    }
-    
-    // Actualizar gráfico de distribución de temperaturas horarias
-    if (data.hourly_temp_distribution) {
-        const tempDistImg = document.getElementById('temperature-distribution');
-        if (tempDistImg) {
-            tempDistImg.src = data.hourly_temp_distribution;
-        }
-    }
-    
-    // Actualizar gráficos de histogramas de costos
-    updateHistograms(data);
-    
-    // Actualizar gráfico de curvas COP
-    if (data.cop_curves) {
-        const copCurvesImg = document.getElementById('cop-curves');
-        if (copCurvesImg) {
-            copCurvesImg.src = data.cop_curves;
-        }
-    }
+// Actualizar todos los gráficos
+function updateAllCharts(data) {
+    if (data.cop_curves_data) renderCopCurves(data.cop_curves_data);
+    if (data.randomization_data) renderRandomizationChart(data.randomization_data);
+    if (data.hourly_temp_data) renderHourlyTempChart(data.hourly_temp_data);
+    if (data.costs_baseline) updateCostHistogram('baseline-histogram', data.costs_baseline, 'Línea Base', data.baseline_stats);
+    if (data.costs_optimized) updateCostHistogram('optimized-histogram', data.costs_optimized, 'Optimizado', data.optimized_stats);
+
+    // Añadir listeners a los botones de expandir (se hace aquí para asegurar que los gráficos existen)
+    document.querySelectorAll('.expand-chart-btn').forEach(button => {
+        button.onclick = () => openChartInModal(button.dataset.chartCanvas);
+    });
 }
 
-// Actualizar histogramas de costos
-function updateHistograms(data) {
-    // Histograma Línea Base
-    if (data.costs_baseline) {
-        const baselineCanvas = document.getElementById('baseline-histogram');
-        if (baselineCanvas) {
-            // Destruir gráfico anterior si existe
-            if (chartInstances.baseline) {
-                chartInstances.baseline.destroy();
-            }
-            
-            // Crear nuevo histograma
-            const ctx = baselineCanvas.getContext('2d');
-            chartInstances.baseline = createHistogram(
-                ctx, 
-                data.costs_baseline, 
-                'Distribución de Costos - Línea Base',
-                data.baseline_stats.mean,
-                data.baseline_stats.costo90
-            );
-        }
+// --- Funciones de renderizado de gráficos ---
+
+function renderCopCurves(data) {
+    const canvasId = 'cop-curves-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`No se encontró el elemento canvas con id ${canvasId}`);
+        return;
     }
     
-    // Histograma Optimizado
-    if (data.costs_optimized) {
-        const optimizedCanvas = document.getElementById('optimized-histogram');
-        if (optimizedCanvas) {
-            // Destruir gráfico anterior si existe
-            if (chartInstances.optimized) {
-                chartInstances.optimized.destroy();
-            }
-            
-            // Crear nuevo histograma
-            const ctx = optimizedCanvas.getContext('2d');
-            chartInstances.optimized = createHistogram(
-                ctx, 
-                data.costs_optimized, 
-                'Distribución de Costos - Optimizado',
-                data.optimized_stats.mean,
-                data.optimized_stats.costo90
-            );
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const datasets = Object.keys(data.curves).map(key => ({
+        label: data.curves[key].nombre,
+        data: data.curves[key].cops,
+        borderColor: data.curves[key].color,
+        tension: 0.1,
+        fill: false,
+    }));
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: data.temps,
+            datasets: datasets
+        },
+        options: { 
+            ...defaultChartOptions,
+            plugins: { 
+                ...defaultChartOptions.plugins, 
+                title: { 
+                    display: true, 
+                    text: 'Curvas COP vs Temperatura Exterior' 
+                } 
+            } 
         }
-    }
+    });
 }
 
-// Crear histograma
-function createHistogram(ctx, data, label, mean, percentile90) {
-    // Calcular bins para el histograma
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const binWidth = (max - min) / 15;
-    const bins = Array(15).fill(0);
+function renderRandomizationChart(data) {
+    const canvasId = 'randomization-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`No se encontró el elemento canvas con id ${canvasId}`);
+        return;
+    }
+    
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const { t_mins, t_maxs } = data;
+    
+    // Lógica de binning
+    const createBins = (series) => {
+        const min = Math.min(...series);
+        const max = Math.max(...series);
+        const binCount = 10;
+        const binWidth = (max - min) / binCount;
+        
+        const bins = Array(binCount).fill(0);
+        const labels = [];
+        
+        // Crear etiquetas para los bins
+        for (let i = 0; i < binCount; i++) {
+            const binStart = min + i * binWidth;
+            const binEnd = binStart + binWidth;
+            labels.push(`${binStart.toFixed(1)}-${binEnd.toFixed(1)}`);
+        }
+        
+        // Contar valores en cada bin
+        series.forEach(value => {
+            const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
+            bins[binIndex]++;
+        });
+        
+        return { counts: bins, labels };
+    };
+    
+    const minBins = createBins(t_mins);
+    const maxBins = createBins(t_maxs);
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+            labels: minBins.labels,
+            datasets: [
+                { label: 'T Mínima', data: minBins.counts, backgroundColor: 'rgba(54, 162, 235, 0.6)' },
+                { label: 'T Máxima', data: maxBins.counts, backgroundColor: 'rgba(255, 99, 132, 0.6)' }
+            ]
+        },
+        options: { 
+            ...defaultChartOptions, 
+            scales: { 
+                x: { 
+                    ...defaultChartOptions.scales.x, 
+                    stacked: true 
+                }, 
+                y: { 
+                    ...defaultChartOptions.scales.y, 
+                    stacked: true 
+                } 
+            } 
+        }
+    });
+}
+
+function renderHourlyTempChart(data) {
+    const canvasId = 'hourly-temp-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`No se encontró el elemento canvas con id ${canvasId}`);
+        return;
+    }
+    
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const hourLabels = Array.from({length: 24}, (_, i) => `${i}:00`);
+    
+    const options = {
+        ...defaultChartOptions,
+        plugins: {
+            ...defaultChartOptions.plugins
+        }
+    };
+    
+    // Añadir anotaciones si el plugin está disponible
+    if (Chart.annotation) {
+        options.plugins.annotation = {
+            annotations: {
+                minHour: {
+                    type: 'point',
+                    xValue: data.min_hour,
+                    yValue: data.hourly_means[data.min_hour],
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    radius: 5,
+                    label: {
+                        content: `Mín: ${data.hourly_means[data.min_hour].toFixed(1)}°C`,
+                        enabled: true,
+                        position: 'top'
+                    }
+                },
+                maxHour: {
+                    type: 'point',
+                    xValue: data.max_hour,
+                    yValue: data.hourly_means[data.max_hour],
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    radius: 5,
+                    label: {
+                        content: `Máx: ${data.hourly_means[data.max_hour].toFixed(1)}°C`,
+                        enabled: true,
+                        position: 'top'
+                    }
+                }
+            }
+        };
+    }
+    
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: hourLabels,
+            datasets: [{
+                label: 'Temperatura Media (°C)',
+                data: data.hourly_means,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: options
+    });
+}
+
+function updateCostHistogram(canvasId, costs, label, stats) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`No se encontró el elemento canvas con id ${canvasId}`);
+        return;
+    }
+    
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    
+    // Crear bins para el histograma
+    const min = Math.min(...costs);
+    const max = Math.max(...costs);
+    const binCount = 15;
+    const binWidth = (max - min) / binCount;
+    
+    const bins = Array(binCount).fill(0);
+    const labels = [];
+    
+    // Crear etiquetas para los bins
+    for (let i = 0; i < binCount; i++) {
+        const binStart = min + i * binWidth;
+        const binEnd = binStart + binWidth;
+        labels.push(`$${binStart.toFixed(2)}-$${binEnd.toFixed(2)}`);
+    }
     
     // Contar valores en cada bin
-    data.forEach(value => {
-        const binIndex = Math.min(Math.floor((value - min) / binWidth), bins.length - 1);
+    costs.forEach(value => {
+        const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
         bins[binIndex]++;
     });
     
-    // Normalizar bins para obtener densidad de probabilidad
-    const totalSamples = data.length;
-    const normalizedBins = bins.map(count => count / (totalSamples * binWidth));
+    const options = {
+        ...defaultChartOptions,
+        plugins: {
+            ...defaultChartOptions.plugins
+        }
+    };
     
-    // Crear etiquetas para el eje x (centros de los bins)
-    const labels = Array(15).fill(0).map((_, i) => (min + (i + 0.5) * binWidth).toFixed(2));
+    // Añadir anotaciones si el plugin está disponible
+    if (Chart.annotation) {
+        options.plugins.annotation = {
+            annotations: {
+                meanLine: {
+                    type: 'line',
+                    scaleID: 'x',
+                    value: stats.mean,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    label: {
+                        content: `Media: $${stats.mean.toFixed(2)}`,
+                        enabled: true,
+                        position: 'start'
+                    }
+                },
+                costo90Line: {
+                    type: 'line',
+                    scaleID: 'x',
+                    value: stats.costo90,
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 2,
+                    label: {
+                        content: `Costo90: $${stats.costo90.toFixed(2)}`,
+                        enabled: true,
+                        position: 'end'
+                    }
+                }
+            }
+        };
+    }
     
     // Crear gráfico
-    return new Chart(ctx, {
+    chartInstances[canvasId] = new Chart(chartCtx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Densidad de Probabilidad',
-                data: normalizedBins,
-                backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                borderColor: 'rgba(75, 192, 192, 1)',
+                label: `Costo ${label}`,
+                data: bins,
+                backgroundColor: label === 'Línea Base' ? 'rgba(54, 162, 235, 0.6)' : 'rgba(75, 192, 192, 0.6)',
+                borderColor: label === 'Línea Base' ? 'rgba(54, 162, 235, 1)' : 'rgba(75, 192, 192, 1)',
                 borderWidth: 1
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Costo Mensual ($)'
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'Densidad de Probabilidad'
-                    }
-                }
-            },
-            plugins: {
-                title: {
-                    display: true,
-                    text: label
-                },
-                annotation: {
-                    annotations: {
-                        meanLine: {
-                            type: 'line',
-                            xMin: mean,
-                            xMax: mean,
-                            borderColor: 'red',
-                            borderWidth: 2,
-                            label: {
-                                enabled: true,
-                                content: `Media: $${mean.toFixed(2)}`,
-                                position: 'start'
-                            }
-                        },
-                        percentileLine: {
-                            type: 'line',
-                            xMin: percentile90,
-                            xMax: percentile90,
-                            borderColor: 'purple',
-                            borderWidth: 2,
-                            label: {
-                                enabled: true,
-                                content: `Costo90: $${percentile90.toFixed(2)}`,
-                                position: 'end'
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        options: options
     });
 }
 
@@ -552,4 +729,70 @@ function showError(message) {
     }
     
     console.error(message);
+}
+
+// Lógica del modal
+function initModal() {
+    const modal = document.getElementById('chart-modal');
+    const modalCloseBtn = modal.querySelector('.close-button');
+
+    function closeModal() {
+        modal.style.display = 'none';
+        if (chartInstances.modal) {
+            chartInstances.modal.destroy();
+            chartInstances.modal = null;
+        }
+    }
+
+    modalCloseBtn.onclick = closeModal;
+    window.onclick = (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    };
+}
+
+function openChartInModal(canvasId) {
+    const originalChart = chartInstances[canvasId];
+    if (!originalChart) return;
+
+    const modal = document.getElementById('chart-modal');
+    const modalCanvas = document.getElementById('modal-chart');
+    const modalCtx = modalCanvas.getContext('2d');
+    
+    if (chartInstances.modal) {
+        chartInstances.modal.destroy();
+    }
+    
+    // Clonar configuración de manera segura
+    const modalConfig = {
+        type: originalChart.config.type,
+        data: JSON.parse(JSON.stringify(originalChart.data)),
+        options: JSON.parse(JSON.stringify(originalChart.config.options || {}))
+    };
+    
+    // Asegurarse de que la estructura de plugins existe
+    if (!modalConfig.options.plugins) {
+        modalConfig.options.plugins = {};
+    }
+    
+    // Añadir configuración de zoom
+    modalConfig.options.plugins.zoom = {
+        pan: {
+            enabled: true,
+            mode: 'xy'
+        },
+        zoom: {
+            wheel: {
+                enabled: true,
+            },
+            pinch: {
+                enabled: true
+            },
+            mode: 'xy',
+        }
+    };
+
+    chartInstances.modal = new Chart(modalCtx, modalConfig);
+    modal.style.display = 'block';
 } 
