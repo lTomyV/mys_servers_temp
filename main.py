@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config.settings import NUM_SIMULATIONS
 from src.simulation.runner import run_monte_carlo_simulation
 from src.analysis.statistics import calculate_cost_statistics, calculate_temperature_statistics, compare_strategies
-from src.visualization.plots import plot_cost_distribution, plot_temperature_density, print_comparison_table
+from src.visualization.plots import plot_cost_distribution, plot_temperature_density, print_comparison_table, plot_randomization_diagnostic
 
 
 def print_results(costs, strategy_name):
@@ -78,6 +78,10 @@ def main():
     print_temperature_stats(temp_stats)
     plot_temperature_density(temp_stats)
     
+    # Generar diagnóstico de randomización
+    print("\n--- Generando diagnóstico de randomización ---")
+    plot_randomization_diagnostic(temp_profiles_baseline, temp_stats)
+    
     # Comparación de estrategias
     print("\n" + "="*60)
     comparison = compare_strategies(results_baseline, results_optimized)
@@ -90,6 +94,7 @@ def main():
     print("- histograma_costos_Línea Base.png")
     print("- histograma_costos_Optimizada.png") 
     print("- distribucion_temperaturas_horarias.png")
+    print("- diagnostico_randomizacion.png (validación científica)")
 
 
 if __name__ == "__main__":

@@ -79,6 +79,7 @@ El simulador genera los siguientes archivos en la carpeta `graphs/`:
 - `histograma_costos_Línea Base.png` - Distribución de costos estrategia tradicional
 - `histograma_costos_Optimizada.png` - Distribución de costos estrategia optimizada  
 - `distribucion_temperaturas_horarias.png` - Mapa de calor de temperaturas por hora
+- `diagnostico_randomizacion.png` - **Validación científica de la randomización**
 
 ## Dependencias
 
