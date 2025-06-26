@@ -1,0 +1,22 @@
+TRABAJO PRÁCTICO INTEGRADOR
+
+Situación problemática
+No hubo ninguna novedad durante par de meses de última comunicación el joven ingeniero, encargado del diseño del sistema de refrigeración de la sala de servidores situada en una ciudad calurosa.
+Sus problemas parecían resueltos y suponíamos que estaría contento y tranquilo con su trabajo, hasta que…
+Recibimos el siguiente mensaje:
+Estimados compañeros, debo agradecerles en gran medida la ayuda que me han dado para poder anticipar que requeriría un refuerzo en el sistema de refrigeración con aquella simulación.
+Sin embargo, estoy con un nuevo problema. Mis jefes están interesados en mejorar el uso de la energía. En estos momentos cada kWh de energía nos cuesta 0.13 U$D.
+Además, me han sugerido hacer un estudio probabilístico para un mes de enero completo. Donde les pueda dar una aproximación de la distribución de probabilidad del costo de la energía consumida durante un mes de Enero.
+
+Me encuentro atascado en esta tarea y ChatGPT me ha dejado a más perdido que antes. 
+Les comparto algunas de las cosas que he logrado establecer, que podría ser un punto de partida para un modelo de simulación.
+•	Tenemos acceso a las temperaturas de varias ciudades registradas por el servicio meteorológico nacional. Se pueden buscar los datos referentes a algunas ciudades calientes de Argentina, tales como Santa Fe, Corrientes, Rosario, etc. Si además conseguimos las temperaturas mínimas y máximas podríamos proponer alguna función que nos de aproximadamente la temperatura a lo largo del día.
+•	En encontré como generar variables aleatorias básicas en OpenModelica, por ahora es solo una distribución uniforme, pero quizás ustedes puedan generar con eso alguna distribución más parecida a lo que muestren los datos reales.
+o	El código básico lo pueden encontrar en el archivo ‘aleatorio.mo’.
+•	Podría ser interesante hacer que la temperatura mínima y máxima de cada día cambien aleatoriamente y se utilicen con la función definida al principio para para simular el perfil de temperatura exterior.
+
+Por último, el objetivo es encontrar una forma de controlar la potencia de enfriamiento de manera que el consumo de energía promedio sea mínimo, así como también obtener un histograma del costo de la energía, que nos permita tener una idea de que costo Costo90, el cual nos garantiza que el 90% todos los costos posibles sean menores a dicho valor.
+
+PD:
+No tengo modo de pagarles esta ayuda. Literalmente, estoy seco. Pero seguramente si están entre los tres mejores valores de energía consumida tendrán garantizada una nota de 10.
+

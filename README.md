@@ -7,6 +7,7 @@ Este proyecto implementa un simulador de Monte Carlo para analizar el consumo en
 ```
 mys_servers_temp/
 ├── main.py                    # Archivo principal del simulador
+├── app.py                     # Aplicación web Flask
 ├── config/
 │   ├── __init__.py
 │   └── settings.py           # Configuración del experimento
@@ -25,6 +26,12 @@ mys_servers_temp/
 │       ├── __init__.py
 │       └── plots.py          # Generación de gráficos
 ├── graphs/                   # Gráficos generados por el simulador
+├── static/                   # Archivos estáticos para la web
+│   ├── css/                  # Hojas de estilo
+│   ├── js/                   # JavaScript
+│   └── graphs/               # Gráficos para la web
+├── templates/                # Plantillas HTML
+│   └── index.html            # Página principal
 ├── requirements.txt          # Dependencias de Python
 └── README.md                 # Este archivo
 ```
@@ -47,9 +54,14 @@ mys_servers_temp/
 - Mapas de calor de temperaturas horarias
 - Comparación entre estrategias
 
+### Interfaz Web
+- Visualización interactiva de gráficos
+- Diseño moderno y responsive
+- Expansión de gráficos para análisis detallado
+
 ## Uso
 
-### Ejecución
+### Ejecución del Simulador
 ```bash
 python main.py
 ```
@@ -59,6 +71,16 @@ python main.py
 2. 100 simulaciones Monte Carlo para estrategia "Optimizada"  
 3. Análisis estadístico comparativo
 4. Generación de gráficos en la carpeta `graphs/`
+
+### Ejecución de la Aplicación Web
+```bash
+python app.py
+```
+
+**La aplicación web permite:**
+1. Visualizar todos los gráficos en una interfaz moderna
+2. Expandir cada gráfico para un análisis detallado
+3. Acceder a través de cualquier navegador en http://localhost:5000
 
 ### Configuración
 Modifica `config/settings.py` para ajustar:
@@ -84,7 +106,7 @@ El simulador genera los siguientes archivos en la carpeta `graphs/`:
 ## Dependencias
 
 ```bash
-pip install numpy matplotlib scipy
+pip install numpy matplotlib scipy flask
 ```
 
 ### Simulaciones Avanzadas (Opcional)
@@ -115,10 +137,13 @@ Cálculo de estadísticas de costos y temperaturas.
 ### src/visualization/plots.py
 Generación de todos los gráficos y visualizaciones.
 
+### app.py
+Aplicación web Flask para visualizar los resultados.
+
 ## Extensiones Futuras
 
 - Integración real con OpenModelica
 - Más estrategias de control
 - Análisis de sensibilidad
 - Optimización de parámetros
-- Interfaz gráfica de usuario
+- Mejoras a la interfaz web

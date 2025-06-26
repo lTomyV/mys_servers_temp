@@ -1,0 +1,452 @@
+/* Modern CSS Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --accent-color: #e74c3c;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --light-color: #ecf0f1;
+    --dark-color: #2c3e50;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --card-radius: 8px;
+    --transition: all 0.3s ease;
+}
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f7fa;
+    color: var(--dark-color);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header Styles */
+header {
+    text-align: center;
+    padding: 30px 0;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border-radius: var(--card-radius);
+    margin-bottom: 30px;
+    box-shadow: var(--shadow);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 600;
+}
+
+header .subtitle {
+    margin-top: 10px;
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+/* Simulation Panel Styles */
+.simulation-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: white;
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow);
+}
+
+.btn-simulate {
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1.2rem;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-simulate:hover {
+    background-color: #27ae60;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-simulate:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-simulate i {
+    font-size: 1.4rem;
+}
+
+.simulation-status {
+    margin-top: 20px;
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+}
+
+#status-message {
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+#progress-container {
+    height: 10px;
+    background-color: #eee;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+#progress-bar {
+    height: 100%;
+    width: 0;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Animation Styles */
+.animation-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    height: 150px;
+    margin: 20px 0;
+}
+
+.server-rack {
+    display: flex;
+    flex-direction: column;
+    width: 100px;
+    height: 120px;
+    background-color: #34495e;
+    border-radius: 5px;
+    padding: 5px;
+    gap: 5px;
+}
+
+.server {
+    height: 30px;
+    background-color: #7f8c8d;
+    border-radius: 3px;
+    position: relative;
+}
+
+.server::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: #e74c3c;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.hvac-unit {
+    width: 80px;
+    height: 100px;
+    background-color: #95a5a6;
+    border-radius: 5px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.fan {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #7f8c8d;
+    border-radius: 50%;
+    position: relative;
+    animation: spin 1s linear infinite;
+}
+
+.fan::before, .fan::after {
+    content: '';
+    position: absolute;
+    background-color: #7f8c8d;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.fan::before {
+    width: 80%;
+    height: 3px;
+}
+
+.fan::after {
+    width: 3px;
+    height: 80%;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.status-light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--success-color);
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.temperature-display {
+    width: 80px;
+    height: 40px;
+    background-color: #2c3e50;
+    color: #e74c3c;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.temp-value {
+    animation: tempChange 5s infinite;
+}
+
+@keyframes tempChange {
+    0% { color: #3498db; }
+    50% { color: #e74c3c; }
+    100% { color: #3498db; }
+}
+
+/* Dashboard Layout */
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 25px;
+}
+
+.welcome-message {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 50px;
+    background-color: white;
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow);
+}
+
+.welcome-message i {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-20px); }
+    60% { transform: translateY(-10px); }
+}
+
+/* Graph Card Styles */
+.graph-card {
+    background-color: white;
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+}
+
+.graph-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+    padding: 15px 20px;
+    background-color: var(--light-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--secondary-color);
+}
+
+.card-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.chart-container {
+    width: 100%;
+    height: 300px;
+    position: relative;
+}
+
+.heatmap-container {
+    width: 100%;
+    height: 300px;
+    position: relative;
+}
+
+.chart-explanation {
+    font-size: 0.95rem;
+    color: #555;
+    line-height: 1.5;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid var(--primary-color);
+}
+
+/* Button Styles */
+.btn-expand {
+    background-color: transparent;
+    border: none;
+    color: var(--secondary-color);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: var(--transition);
+}
+
+.btn-expand:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--primary-color);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    overflow: auto;
+}
+
+.modal-content {
+    position: relative;
+    background-color: white;
+    margin: 5% auto;
+    padding: 20px;
+    width: 90%;
+    max-width: 1200px;
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow);
+}
+
+#modal-chart-container {
+    width: 100%;
+    height: 60vh;
+    max-height: 600px;
+    position: relative;
+}
+
+.modal-content h3 {
+    text-align: center;
+    margin-top: 15px;
+    color: var(--secondary-color);
+}
+
+.modal-explanation {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.close-button {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--dark-color);
+    cursor: pointer;
+}
+
+.close-button:hover {
+    color: var(--accent-color);
+}
+
+/* Footer Styles */
+footer {
+    text-align: center;
+    margin-top: 40px;
+    padding: 20px;
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .card-header h2 {
+        font-size: 1.1rem;
+    }
+    
+    .chart-container, .heatmap-container {
+        height: 250px;
+    }
+    
+    #modal-chart-container {
+        height: 50vh;
+    }
+} 

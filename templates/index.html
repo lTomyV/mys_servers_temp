@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Servidores - Monte Carlo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para gráficos interactivos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js annotation plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <!-- heatmap.js para mapa de calor -->
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-server"></i> Análisis de Servidores - Monte Carlo</h1>
+            <p class="subtitle">Simulación y visualización de resultados</p>
+        </header>
+
+        <div class="simulation-panel">
+            <button id="simulate-btn" class="btn-simulate">
+                <i class="fas fa-play-circle"></i> Iniciar Simulación
+            </button>
+            <div class="simulation-status">
+                <div id="status-message">Listo para simular</div>
+                <div id="progress-container" class="hidden">
+                    <div id="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <main>
+            <div class="dashboard" id="dashboard">
+                <!-- Los gráficos se cargarán aquí después de la simulación -->
+                <div class="welcome-message" id="welcome-message">
+                    <i class="fas fa-arrow-up"></i>
+                    <h2>Haz clic en "Iniciar Simulación" para comenzar</h2>
+                    <p>El sistema generará datos basados en el modelo de OpenModelica y mostrará los resultados en gráficos interactivos.</p>
+                </div>
+            </div>
+        </main>
+
+        <div id="modal" class="modal">
+            <div class="modal-content">
+                <span class="close-button">&times;</span>
+                <div id="modal-chart-container">
+                    <canvas id="modal-chart"></canvas>
+                </div>
+                <h3 id="modal-title"></h3>
+                <div id="modal-explanation" class="modal-explanation"></div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2024 Simulador de Análisis de Servidores</p>
+        </footer>
+    </div>
+
+    <!-- Templates para los gráficos -->
+    <template id="chart-template">
+        <div class="graph-card">
+            <div class="card-header">
+                <h2 class="chart-title"></h2>
+                <div class="card-actions">
+                    <button class="btn-expand">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas class="chart-canvas"></canvas>
+                </div>
+                <div class="chart-explanation"></div>
+            </div>
+        </div>
+    </template>
+
+    <template id="heatmap-template">
+        <div class="graph-card">
+            <div class="card-header">
+                <h2 class="chart-title"></h2>
+                <div class="card-actions">
+                    <button class="btn-expand">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <div class="heatmap-container"></div>
+                </div>
+                <div class="chart-explanation"></div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Animaciones para la simulación -->
+    <template id="animation-template">
+        <div class="animation-container">
+            <div class="server-rack">
+                <div class="server"></div>
+                <div class="server"></div>
+                <div class="server"></div>
+            </div>
+            <div class="hvac-unit">
+                <div class="fan"></div>
+                <div class="status-light"></div>
+            </div>
+            <div class="temperature-display">
+                <span class="temp-value">24.5°C</span>
+            </div>
+        </div>
+    </template>
+
+    <!-- Hidden elements for explanations -->
+    <div style="display: none;">
+        <div data-explanation="temperature_distribution">{{ explanations.temperature_distribution }}</div>
+        <div data-explanation="cost_baseline">{{ explanations.cost_baseline }}</div>
+        <div data-explanation="cost_optimized">{{ explanations.cost_optimized }}</div>
+        <div data-explanation="randomization">{{ explanations.randomization }}</div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html> 
