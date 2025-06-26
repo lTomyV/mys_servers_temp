@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Análisis de Servidores - Monte Carlo</title>
+    <title>Simulación de Servidores - Análisis Monte Carlo</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -15,116 +15,185 @@
     <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><i class="fas fa-server"></i> Análisis de Servidores - Monte Carlo</h1>
-            <p class="subtitle">Simulación y visualización de resultados</p>
-        </header>
+    <header>
+        <h1>Simulación de Servidores - Análisis Monte Carlo</h1>
+        <p class="subtitle">Optimización de consumo energético en centros de datos</p>
+    </header>
 
-        <div class="simulation-panel">
-            <button id="simulate-btn" class="btn-simulate">
-                <i class="fas fa-play-circle"></i> Iniciar Simulación
-            </button>
-            <div class="simulation-status">
-                <div id="status-message">Listo para simular</div>
-                <div id="progress-container" class="hidden">
-                    <div id="progress-bar"></div>
+    <main>
+        <section class="intro-section">
+            <h2>Simulación Física de Servidores</h2>
+            <p>Esta aplicación simula el comportamiento térmico y el consumo energético de una sala de servidores utilizando un modelo físico detallado y análisis Monte Carlo para evaluar diferentes estrategias de control.</p>
+            
+            <div class="simulation-controls">
+                <div class="control-group">
+                    <label for="modelo-refrigeracion">Modelo de Refrigeración:</label>
+                    <select id="modelo-refrigeracion">
+                        <!-- Opciones predeterminadas en caso de que la carga dinámica falle -->
+                        <option value="economico">Económico (Estándar)</option>
+                        <option value="eficiente" selected>Eficiente (Inverter)</option>
+                        <option value="premium">Premium (VRF)</option>
+                    </select>
+                    <div class="model-tooltip">
+                        <span class="tooltip-icon">?</span>
+                        <div class="tooltip-content">
+                            <p>Seleccione el modelo de equipo de refrigeración a utilizar en la simulación:</p>
+                            <ul>
+                                <li><strong>Económico:</strong> Menor costo inicial pero menor eficiencia energética</li>
+                                <li><strong>Eficiente:</strong> Balance entre costo y eficiencia</li>
+                                <li><strong>Premium:</strong> Mayor costo inicial pero máxima eficiencia energética</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="simulate-button">Simular</button>
+            </div>
+            
+            <div id="simulation-status" class="status-message"></div>
+            <div id="simulation-progress"></div>
+        </section>
+
+        <section id="results-section" class="results-section">
+            <h2>Resultados de la Simulación</h2>
+            
+            <div id="modelo-info" class="modelo-info-panel">
+                <!-- Información del modelo de refrigeración seleccionado -->
+            </div>
+            
+            <div id="cost-stats" class="stats-panel">
+                <!-- Estadísticas de costo -->
+            </div>
+            
+            <div class="results-grid">
+                <div class="result-card">
+                    <h3>Curvas COP de Refrigeración</h3>
+                    <div class="chart-container">
+                        <img id="cop-curves" class="result-image" alt="Curvas COP">
+                        <div class="explanation-trigger" data-target="cop-curves-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="cop-curves-explanation" class="explanation-text">
+                            {{ explanations.cop_curves }}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Diagnóstico de Randomización</h3>
+                    <div class="chart-container">
+                        <img id="randomization-diagnostic" class="result-image" alt="Diagnóstico de Randomización">
+                        <div class="explanation-trigger" data-target="randomization-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="randomization-explanation" class="explanation-text">
+                            {{ explanations.randomization }}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Distribución de Temperaturas Horarias</h3>
+                    <div class="chart-container">
+                        <img id="temperature-distribution" class="result-image" alt="Distribución de Temperaturas Horarias">
+                        <div class="explanation-trigger" data-target="temperature-distribution-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="temperature-distribution-explanation" class="explanation-text">
+                            {{ explanations.temperature_distribution }}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Histograma de Costos - Línea Base</h3>
+                    <div class="chart-container">
+                        <canvas id="baseline-histogram"></canvas>
+                        <div class="explanation-trigger" data-target="cost-baseline-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="cost-baseline-explanation" class="explanation-text">
+                            {{ explanations.cost_baseline }}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Histograma de Costos - Optimizado</h3>
+                    <div class="chart-container">
+                        <canvas id="optimized-histogram"></canvas>
+                        <div class="explanation-trigger" data-target="cost-optimized-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="cost-optimized-explanation" class="explanation-text">
+                            {{ explanations.cost_optimized }}
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <main>
-            <div class="dashboard" id="dashboard">
-                <!-- Los gráficos se cargarán aquí después de la simulación -->
-                <div class="welcome-message" id="welcome-message">
-                    <i class="fas fa-arrow-up"></i>
-                    <h2>Haz clic en "Iniciar Simulación" para comenzar</h2>
-                    <p>El sistema generará datos basados en el modelo de OpenModelica y mostrará los resultados en gráficos interactivos.</p>
+            
+            <div id="simulation-time" class="simulation-time"></div>
+        </section>
+        
+        <section class="technical-section">
+            <h2>Detalles Técnicos del Modelo</h2>
+            
+            <div class="tech-details">
+                <div class="tech-card">
+                    <h3>Modelo Físico</h3>
+                    <p>El modelo físico implementa ecuaciones diferenciales que representan la dinámica térmica de una sala de servidores:</p>
+                    <div class="equation">
+                        <p>dT/dt = (Q<sub>servers</sub> + Q<sub>transmission</sub> - Q<sub>cooling</sub>) / C<sub>th</sub></p>
+                    </div>
+                    <p>Donde:</p>
+                    <ul>
+                        <li>T: Temperatura de la sala [K]</li>
+                        <li>Q<sub>servers</sub>: Calor generado por los servidores [W]</li>
+                        <li>Q<sub>transmission</sub>: Calor transmitido desde el exterior [W]</li>
+                        <li>Q<sub>cooling</sub>: Potencia de refrigeración [W]</li>
+                        <li>C<sub>th</sub>: Capacidad térmica de la sala [J/K]</li>
+                    </ul>
+                </div>
+                
+                <div class="tech-card">
+                    <h3>Estrategias de Control</h3>
+                    <div class="strategy-comparison">
+                        <div class="strategy">
+                            <h4>Línea Base</h4>
+                            <p>Control termostático simple:</p>
+                            <ul>
+                                <li>Si T > 24°C → Refrigeración ON</li>
+                                <li>Si T ≤ 24°C → Refrigeración OFF</li>
+                            </ul>
+                        </div>
+                        <div class="strategy">
+                            <h4>Optimizado</h4>
+                            <p>Pre-enfriamiento predictivo:</p>
+                            <ul>
+                                <li>Si T > 26°C → Refrigeración ON</li>
+                                <li>Si T > 22°C y COP > 3.0 → Refrigeración ON</li>
+                                <li>En otro caso → Refrigeración OFF</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tech-card">
+                    <h3>Modelo de Consumo Energético</h3>
+                    <p>El consumo eléctrico del sistema de refrigeración se calcula como:</p>
+                    <div class="equation">
+                        <p>P<sub>electric</sub> = Q<sub>cooling</sub> / COP</p>
+                    </div>
+                    <p>Donde el COP (Coefficient of Performance) depende de la temperatura exterior y del modelo de refrigeración seleccionado.</p>
                 </div>
             </div>
-        </main>
+        </section>
+    </main>
 
-        <div id="modal" class="modal">
-            <div class="modal-content">
-                <span class="close-button">&times;</span>
-                <div id="modal-chart-container">
-                    <canvas id="modal-chart"></canvas>
-                </div>
-                <h3 id="modal-title"></h3>
-                <div id="modal-explanation" class="modal-explanation"></div>
-            </div>
-        </div>
+    <footer>
+        <p>&copy; 2025 Simulación de Servidores - Análisis Monte Carlo</p>
+    </footer>
 
-        <footer>
-            <p>&copy; 2024 Simulador de Análisis de Servidores</p>
-        </footer>
-    </div>
-
-    <!-- Templates para los gráficos -->
-    <template id="chart-template">
-        <div class="graph-card">
-            <div class="card-header">
-                <h2 class="chart-title"></h2>
-                <div class="card-actions">
-                    <button class="btn-expand">
-                        <i class="fas fa-expand-alt"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas class="chart-canvas"></canvas>
-                </div>
-                <div class="chart-explanation"></div>
-            </div>
-        </div>
-    </template>
-
-    <template id="heatmap-template">
-        <div class="graph-card">
-            <div class="card-header">
-                <h2 class="chart-title"></h2>
-                <div class="card-actions">
-                    <button class="btn-expand">
-                        <i class="fas fa-expand-alt"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <div class="heatmap-container"></div>
-                </div>
-                <div class="chart-explanation"></div>
-            </div>
-        </div>
-    </template>
-
-    <!-- Animaciones para la simulación -->
-    <template id="animation-template">
-        <div class="animation-container">
-            <div class="server-rack">
-                <div class="server"></div>
-                <div class="server"></div>
-                <div class="server"></div>
-            </div>
-            <div class="hvac-unit">
-                <div class="fan"></div>
-                <div class="status-light"></div>
-            </div>
-            <div class="temperature-display">
-                <span class="temp-value">24.5°C</span>
-            </div>
-        </div>
-    </template>
-
-    <!-- Hidden elements for explanations -->
-    <div style="display: none;">
-        <div data-explanation="temperature_distribution">{{ explanations.temperature_distribution }}</div>
-        <div data-explanation="cost_baseline">{{ explanations.cost_baseline }}</div>
-        <div data-explanation="cost_optimized">{{ explanations.cost_optimized }}</div>
-        <div data-explanation="randomization">{{ explanations.randomization }}</div>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/scripts_new.js') }}"></script>
 </body>
 </html> 
