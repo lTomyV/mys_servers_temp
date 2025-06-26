@@ -36,9 +36,20 @@ def print_temperature_stats(temp_stats):
     print(f"Temperatura mínima registrada: {temp_stats['temp_min']:.1f}°C")
     print(f"Temperatura máxima registrada: {temp_stats['temp_max']:.1f}°C")
     print(f"Hora con temperatura promedio más baja: {temp_stats['min_hour']:02d}:00 "
-          f"({temp_stats['hourly_means'][temp_stats['min_hour']]:.1f}°C)")
+          f"({temp_stats['hourly_means'][temp_stats['min_hour']]:.2f}°C)")
     print(f"Hora con temperatura promedio más alta: {temp_stats['max_hour']:02d}:00 "
-          f"({temp_stats['hourly_means'][temp_stats['max_hour']]:.1f}°C)")
+          f"({temp_stats['hourly_means'][temp_stats['max_hour']]:.2f}°C)")
+    
+    # Agregar información adicional sobre variabilidad
+    print(f"Rango de promedios horarios: [{temp_stats['hourly_means'].min():.2f}, "
+          f"{temp_stats['hourly_means'].max():.2f}]°C")
+    print(f"Variabilidad entre horas: σ = {temp_stats['hourly_means'].std():.2f}°C")
+    
+    # Mostrar algunos promedios horarios clave para verificar variabilidad
+    key_hours = [0, 6, 12, 16, 18, 23]
+    print("\nPromedios horarios de muestra:")
+    for hour in key_hours:
+        print(f"  {hour:02d}:00 → {temp_stats['hourly_means'][hour]:.2f}°C")
 
 
 def main():

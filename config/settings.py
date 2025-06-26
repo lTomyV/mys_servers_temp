@@ -10,9 +10,9 @@ COST_PER_KWH = 0.13
 
 # --- Parámetros Estadísticos del Clima (datos reales) ---
 TMIN_MEDIAN = 21
-TMAX_MEDIAN = 38
+TMAX_MEDIAN = 37.5
 TMIN_SIGMA = 1.177
-TMAX_SIGMA = 4.62
+TMAX_SIGMA = 3.56
 
 # Horarios de extremos de temperatura
 TMIN_HOUR = 6  # 6am
