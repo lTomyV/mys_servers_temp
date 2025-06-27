@@ -396,7 +396,7 @@ function updateAllCharts(data) {
     if (data.ambient_temp_data) renderAmbientTempChart(data.ambient_temp_data);
     if (data.randomization_data) renderRandomizationChart(data.randomization_data);
     if (data.cop_curves_data) renderCopCurves(data.cop_curves_data);
-    if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'HVAC', data.cost_stats);
+    if (data.costs_hvac) updateCostHistogram('cost-histogram', data.costs_hvac, 'HVAC', data.hvac_stats);
     if (data.costs_servers) updateCostHistogram('server-cost-histogram', data.costs_servers, 'Servidores', data.server_stats);
     if (data.daily_max_avg) renderDailyMaxChart(data.daily_max_avg);
     

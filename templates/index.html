@@ -165,17 +165,17 @@
                 </div>
                 
                 <div class="result-card">
-                    <h3>Histograma de Costos</h3>
+                    <h3>Histograma de Costos HVAC</h3>
                     <div class="chart-container">
                         <canvas id="cost-histogram"></canvas>
                         <button class="expand-chart-btn" data-chart-canvas="cost-histogram">
                             <i class="fas fa-expand-arrows-alt"></i>
                         </button>
-                        <div class="explanation-trigger" data-target="cost-monthly-explanation">
+                        <div class="explanation-trigger" data-target="cost-hvac-explanation">
                             <span class="info-icon">i</span>
                         </div>
-                        <div id="cost-monthly-explanation" class="explanation-text">
-                            {{ explanations.cost_monthly }}
+                        <div id="cost-hvac-explanation" class="explanation-text">
+                            Este histograma muestra la distribución de probabilidad del costo mensual de energía del sistema HVAC (refrigeración) para el mes de enero. La línea roja indica el costo promedio, mientras que la línea púrpura muestra el Costo90 (valor no superado con el 90% de probabilidad).
                         </div>
                     </div>
                 </div>

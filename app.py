@@ -50,6 +50,7 @@ PARAMS_FISICOS = {
     'A': 126,  # Área de superficie externa (m^2)
     'U': 4.2,  # Coeficiente de transferencia de calor mejorado (W/m^2.K) - reducido de 5.5 para mejor aislamiento
     'Q_servers': 45000,  # Carga térmica de los servidores (W)
+    'Q_infiltration': 8000,  # Carga térmica adicional por infiltración/ventilación (W)
     'C_th': 2_500_000,  # Capacidad térmica optimizada de la sala (J/K) - aumentada para mayor inercia térmica
     'Q_max_cooling': 75000,  # Potencia máxima del HVAC (W)
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
@@ -63,6 +64,9 @@ PARAMS_CLIMA = {
     'DELTAT_SIGMA': 3.0   # Desviación estándar de la diferencia térmica diaria (variabilidad)
 }
 
+# Offset de temperatura para simular un escenario climático más extremo (por ejemplo, ola de calor)
+TEMP_OFFSET_C = 3.0  # °C adicionales sobre la temperatura ambiente
+
 # Modelos de equipos de refrigeración con datos reales
 # Fuente: Datos técnicos de fabricantes de equipos HVAC comerciales
 MODELOS_REFRIGERACION = {
@@ -73,13 +77,8 @@ MODELOS_REFRIGERACION = {
         'precio': 3000,  # USD - ajustado por mayor capacidad
         'vida_util': 8,  # años
         'mantenimiento_anual': 250,  # USD/año - ajustado
-        # COP ≈ 2.8 @35°C; cae 0.05 por °C hacia arriba
-        # La lambda calcula el COP real basado en la temperatura exterior:
-        # - t: temperatura exterior en °C
-        # - 2.8: COP nominal a 35°C
-        # - 0.05: degradación del COP por cada °C por encima de 35°C
-        # - max(1.0, ...): asegura que el COP nunca baje de 1.0
-        'cop_curve': lambda t: max(1.0, 2.8 - 0.05 * (t - 35))
+        # Degrada más rápido y a partir de 30 °C para reflejar un equipo básico
+        'cop_curve': lambda t: max(1.0, 2.8 - 0.08 * (t - 30))
     },
     'eficiente': {
         'nombre': 'Eficiente (Inverter)',
@@ -88,12 +87,8 @@ MODELOS_REFRIGERACION = {
         'precio': 5000,  # USD - ajustado por mayor capacidad
         'vida_util': 12,  # años
         'mantenimiento_anual': 180,  # USD/año - ajustado
-        # La lambda calcula el COP real basado en la temperatura exterior:
-        # - t: temperatura exterior en °C
-        # - 3.2: COP nominal a 35°C
-        # - 0.06: degradación del COP por cada °C por encima de 35°C
-        # - max(1.2, ...): asegura que el COP nunca baje de 1.2
-        'cop_curve': lambda t: max(1.2, 3.2 - 0.06 * (t - 35))
+        # Mayor pendiente de degradación y arranque a 30 °C
+        'cop_curve': lambda t: max(1.2, 3.2 - 0.09 * (t - 30))
     },
     'premium': {
         'nombre': 'Premium (VRF)',
@@ -102,12 +97,8 @@ MODELOS_REFRIGERACION = {
         'precio': 8000,  # USD - ajustado por mayor capacidad
         'vida_util': 15,  # años
         'mantenimiento_anual': 150,  # USD/año - ajustado
-        # La lambda calcula el COP real basado en la temperatura exterior:
-        # - t: temperatura exterior en °C
-        # - 3.8: COP nominal a 35°C
-        # - 0.07: degradación del COP por cada °C por encima de 35°C
-        # - max(1.5, ...): asegura que el COP nunca baje de 1.5
-        'cop_curve': lambda t: max(1.5, 3.8 - 0.07 * (t - 35))
+        # Incluso los VRF sufren más allá de 30 °C
+        'cop_curve': lambda t: max(1.5, 3.8 - 0.10 * (t - 30))
     }
 }
 
@@ -224,16 +215,18 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
         T_ambient = hourly_series[idx]
     else:
         T_ambient = perfil_temperatura_diaria(t, t_min_profile[dia], t_max_profile[dia])
+    # Aplicar sesgo de temperatura para escenario extremo
+    T_ambient += TEMP_OFFSET_C
     
     # Calor transmitido desde el exterior
     Q_transmission = params_fisicos['A'] * params_fisicos['U'] * (T_ambient - T_room)
     
     # NUEVO SISTEMA DE CONTROL OPTIMIZADO PARA EFICIENCIA
-    # Setpoints basados en estándares ASHRAE para datacenters (18-27°C recomendado)
-    T_setpoint_critico = 26.5   # Límite crítico absoluto (subido de 24°C a 26.5°C)
-    T_setpoint_alto = 25.5      # Límite alto normal (subido de 23°C a 25.5°C)
-    T_setpoint_objetivo = 24.0  # Temperatura objetivo óptima (subido de 22°C a 24°C)
-    T_setpoint_precool = 22.5   # Inicio de pre-enfriamiento (subido de 21.5°C a 22.5°C)
+    # Set-points más estrictos → mayor tiempo de operación del HVAC
+    T_setpoint_critico = 24.5   # Límite crítico absoluto
+    T_setpoint_alto = 23.5      # Límite alto normal
+    T_setpoint_objetivo = 22.0  # Temperatura objetivo óptima
+    T_setpoint_precool = 20.5   # Inicio de pre-enfriamiento
 
     # Calcular COP actual para tomar decisiones inteligentes
     cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
@@ -273,7 +266,7 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     modelo_sala_servidores._last_cooling = Q_cooling
     
     # Derivada de la temperatura
-    dT_room_dt = (params_fisicos['Q_servers'] + Q_transmission - Q_cooling) / params_fisicos['C_th']
+    dT_room_dt = (params_fisicos['Q_servers'] + params_fisicos.get('Q_infiltration', 0) + Q_transmission - Q_cooling) / params_fisicos['C_th']
     
     # Calcular potencia eléctrica consumida
     cop = calcular_cop(T_ambient, modelo_refrigeracion)
@@ -419,7 +412,7 @@ def get_ambient_temperature_distribution_data():
             for hour in range(24):
                 idx = day * 24 + hour
                 if idx < len(series):
-                    temp = series[idx]
+                    temp = series[idx] + TEMP_OFFSET_C  # Aplicar sesgo de temperatura
                     hourly_temps[hour].append(temp)
                     all_temps.append(temp)  # Recolectar todas las temperaturas
     
@@ -583,16 +576,19 @@ def get_temporal_analysis_data(temp_profiles, modelo_refrigeracion='eficiente'):
             # Fallback si no hay datos suficientes
             T_ambient = 25.0
         
+        # Aplicar sesgo de temperatura para escenario extremo
+        T_ambient += TEMP_OFFSET_C
         temp_exterior.append(T_ambient)
         
         # Calcular potencia del HVAC basada en la lógica del modelo
         T_room = temp_carcasa[i]
         
         # Usar la misma lógica de control optimizada que en el modelo
-        T_setpoint_critico = 26.5   # Límite crítico absoluto
-        T_setpoint_alto = 25.5      # Límite alto normal
-        T_setpoint_objetivo = 24.0  # Temperatura objetivo óptima
-        T_setpoint_precool = 22.5   # Inicio de pre-enfriamiento
+        # Mismos set-points estrictos que en el modelo principal
+        T_setpoint_critico = 24.5
+        T_setpoint_alto = 23.5
+        T_setpoint_objetivo = 22.0
+        T_setpoint_precool = 20.5
         
         # Calcular COP actual
         cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
@@ -708,6 +704,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     simulation_results = {
         'hourly_temps': hourly_temps,
         'costs': costs,
+        'costs_hvac': costs_hvac,
         'cost_stats': cost_stats,
         'hvac_stats': hvac_stats,
         'randomization_data': randomization_data,
