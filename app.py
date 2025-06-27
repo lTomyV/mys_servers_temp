@@ -51,16 +51,16 @@ PARAMS_FISICOS = {
     'U': 5.5,  # Coeficiente de transferencia de calor (W/m^2.K)
     'Q_servers': 45000,  # Carga térmica de los servidores (W)
     'C_th': 2_000_000,  # Capacidad térmica realista de la sala (J/K)
-    'Q_max_cooling': 75000,  # Potencia máxima del HVAC (W) - aumentada de 60kW a 75kW
+    'Q_max_cooling': 75000,  # Potencia máxima del HVAC (W)
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
 }
 
-# Parámetros climáticos
+# Parámetros climáticos para el modelo de temperatura ambiente
 PARAMS_CLIMA = {
-    'TMIN_MU': 20.1,
-    'TMIN_SIGMA': 2.5,
-    'DELTAT_MU': 11.4,
-    'DELTAT_SIGMA': 3.0
+    'TMIN_MU': 20.1,      # Temperatura mínima promedio en grados Celsius (antes lo teniamos en kelvin mas celsius)
+    'TMIN_SIGMA': 2.5,    # Desviación estándar de la temperatura mínima (variabilidad diaria)
+    'DELTAT_MU': 11.4,    # Diferencia promedio entre temperatura máxima y mínima diaria
+    'DELTAT_SIGMA': 3.0   # Desviación estándar de la diferencia térmica diaria (variabilidad)
 }
 
 # Modelos de equipos de refrigeración con datos reales
@@ -74,6 +74,11 @@ MODELOS_REFRIGERACION = {
         'vida_util': 8,  # años
         'mantenimiento_anual': 250,  # USD/año - ajustado
         # COP ≈ 2.8 @35°C; cae 0.05 por °C hacia arriba
+        # La lambda calcula el COP real basado en la temperatura exterior:
+        # - t: temperatura exterior en °C
+        # - 2.8: COP nominal a 35°C
+        # - 0.05: degradación del COP por cada °C por encima de 35°C
+        # - max(1.0, ...): asegura que el COP nunca baje de 1.0
         'cop_curve': lambda t: max(1.0, 2.8 - 0.05 * (t - 35))
     },
     'eficiente': {
@@ -83,6 +88,11 @@ MODELOS_REFRIGERACION = {
         'precio': 5000,  # USD - ajustado por mayor capacidad
         'vida_util': 12,  # años
         'mantenimiento_anual': 180,  # USD/año - ajustado
+        # La lambda calcula el COP real basado en la temperatura exterior:
+        # - t: temperatura exterior en °C
+        # - 3.2: COP nominal a 35°C
+        # - 0.06: degradación del COP por cada °C por encima de 35°C
+        # - max(1.2, ...): asegura que el COP nunca baje de 1.2
         'cop_curve': lambda t: max(1.2, 3.2 - 0.06 * (t - 35))
     },
     'premium': {
@@ -92,6 +102,11 @@ MODELOS_REFRIGERACION = {
         'precio': 8000,  # USD - ajustado por mayor capacidad
         'vida_util': 15,  # años
         'mantenimiento_anual': 150,  # USD/año - ajustado
+        # La lambda calcula el COP real basado en la temperatura exterior:
+        # - t: temperatura exterior en °C
+        # - 3.8: COP nominal a 35°C
+        # - 0.07: degradación del COP por cada °C por encima de 35°C
+        # - max(1.5, ...): asegura que el COP nunca baje de 1.5
         'cop_curve': lambda t: max(1.5, 3.8 - 0.07 * (t - 35))
     }
 }
@@ -106,17 +121,34 @@ def calcular_cop(t_amb_c, modelo=MODELO_ACTUAL):
 
 # Función para calcular la temperatura ambiente en un momento dado
 def perfil_temperatura_diaria(t, t_min, t_max):
-    """Calcula la temperatura ambiente instantánea usando aproximación sinusoidal."""
-    periodo = 86400.0  # 24 horas en segundos
-    freq_ang = 2 * np.pi / periodo
-    # Asume que T_max ocurre a las 15:00 (t=54000s) y T_min a las 5:00 (t=18000s)
-    t_offset = 54000
-    amplitud = (t_max - t_min) / 2
-    linea_media = (t_max + t_min) / 2
+    """
+    Calcula la temperatura ambiente instantánea usando aproximación sinusoidal.
     
-    # Convertir t a segundos dentro del día actual
+    Parámetros:
+    t: tiempo en segundos desde el inicio de la simulación
+    t_min: temperatura mínima diaria en °C
+    t_max: temperatura máxima diaria en °C
+    
+
+    
+    Devuelve:
+    float: temperatura ambiente instantánea en °C para el tiempo t
+    """
+    periodo = 86400.0  # 24 horas en segundos (86400 = 24 * 60 * 60)
+    freq_ang = 2 * np.pi / periodo  # Frecuencia angular para oscilación diaria
+    # Asume que T_max ocurre a las 15:00 (t=54000s) y T_min a las 5:00 (t=18000s)
+    t_offset = 54000  # Desplazamiento temporal para alinear el máximo a las 15:00
+    #La temperatura ambiente sigue un patrón sinusoidal natural:
+    #crea un modelo matemático realista de cómo varía la temperatura exterior durante el día, fundamental para simular correctamente el comportamiento térmico de la sala de servidores y optimizar el consumo energético del sistema HVAC.
+    #Usa una función sinusoidal para modelar la variación diaria de la temperatura, con un periodo de 24 horas y una frecuencia angular de 2π/86400.
+    amplitud = (t_max - t_min) / 2  # Amplitud de la oscilación térmica diaria
+    linea_media = (t_max + t_min) / 2  # Temperatura promedio diaria
+    
+    # Convertir t a segundos dentro del día actual (0-86400)
     t_day = t % periodo
     
+    # Ecuación sinusoidal: T(t) = T_media + A * cos(ω * (t - t_offset))
+    # donde A es la amplitud y ω es la frecuencia angular
     return linea_media + amplitud * np.cos(freq_ang * (t_day - t_offset))
 
 # Esta función debe estar en el nivel superior para que multiprocessing funcione
@@ -136,14 +168,18 @@ def run_single_simulation(args):
     local_params = fisico_params.copy()
     local_params['Q_max_cooling'] = MODELOS_REFRIGERACION[modelo_refrigeracion]['potencia_nominal']
     
+    # Resolver el sistema de ecuaciones diferenciales usando el método RK45
+    # Este es el corazón de la simulación - integra las ecuaciones del modelo físico
+    # RK45 es un método Runge-Kutta de orden 4-5, muy estable para este tipo de problemas
+    # Las tolerancias están relajadas (rtol=1e-2) para acelerar las 200 simulaciones
     sol = solve_ivp(
         lambda t, y: modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, local_params, hourly_series),
-        [0, t_final],
-        y0,
-        t_eval=t_eval,
-        method='RK45',
-        rtol=1e-2,  # Tolerancia relajada para mayor velocidad
-        atol=1e-4
+        [0, t_final],  # Intervalo de tiempo: desde 0 hasta 31 días
+        y0,  # Condiciones iniciales: [24°C, 0 kWh]
+        t_eval=t_eval,  # Puntos de evaluación horarios
+        method='RK45',  # Método de integración numérica
+        rtol=1e-2,  # Tolerancia relativa relajada para velocidad
+        atol=1e-4   # Tolerancia absoluta
     )
     
     T_room_profile = sol.y[0]
@@ -160,7 +196,7 @@ def run_single_simulation(args):
     
     return costo, temp_profile_data
 
-# Modelo físico de la sala de servidores (refactorizado para no usar globales)
+# Modelo físico de la sala de servidores
 def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, params_fisicos, hourly_series=None):
     """
     Modelo dinámico de la sala de servidores.
@@ -325,7 +361,7 @@ def calculate_temperature_statistics(temp_profiles):
         'max_hour': int(max_hour)
     }
 
-# Funciones para preparar datos de gráficos (reemplazan a las funciones que generaban imágenes)
+# Funciones para preparar datos de gráficos
 def get_randomization_diagnostic_data(temp_profiles):
     """Prepara datos para el gráfico de diagnóstico de randomización."""
     if not temp_profiles:
@@ -489,6 +525,83 @@ def get_cost_breakdown_data(costs_hvac, costs_servers):
         'server_percentage': float(np.mean(costs_servers) / (np.mean(costs_hvac) + np.mean(costs_servers)) * 100)
     }
 
+def get_temporal_analysis_data(temp_profiles, modelo_refrigeracion='eficiente'):
+    """Prepara datos para el gráfico de análisis temporal (temperatura exterior, carcasa y potencia HVAC)."""
+    if not temp_profiles:
+        return {
+            'time_hours': [],
+            'temp_exterior': [],
+            'temp_carcasa': [],
+            'potencia_hvac': [],
+            'potencia_max': 0
+        }
+    
+    # Tomar el primer perfil como ejemplo representativo
+    profile = temp_profiles[0]
+    
+    # Convertir tiempo a horas desde el inicio
+    time_hours = [t/3600 for t in profile['tiempo']]
+    
+    # Temperaturas de la carcasa del servidor (temperatura interior)
+    temp_carcasa = profile['T_room']
+    
+    # Calcular temperatura exterior para cada punto temporal
+    temp_exterior = []
+    potencia_hvac = []
+    
+    for i, t in enumerate(profile['tiempo']):
+        # Determinar el día actual
+        dia = min(int(t / 86400), 30)
+        
+        # Calcular temperatura exterior usando el mismo método que el modelo
+        if len(profile['T_min']) > dia and len(profile['T_max']) > dia:
+            T_ambient = perfil_temperatura_diaria(t, profile['T_min'][dia], profile['T_max'][dia])
+        else:
+            # Fallback si no hay datos suficientes
+            T_ambient = 25.0
+        
+        temp_exterior.append(T_ambient)
+        
+        # Calcular potencia del HVAC basada en la lógica del modelo
+        T_room = temp_carcasa[i]
+        
+        # Usar la misma lógica de control que en el modelo
+        T_setpoint_critico = 24.0
+        T_setpoint_normal = 23.0
+        T_setpoint_precool = 21.5
+        
+        # Calcular COP actual
+        cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
+        
+        # Determinar potencia de refrigeración
+        if T_room > T_setpoint_critico:
+            Q_cooling = PARAMS_FISICOS['Q_max_cooling']
+        elif T_room > T_setpoint_normal:
+            Q_cooling = PARAMS_FISICOS['Q_max_cooling']
+        elif T_room > T_setpoint_precool:
+            if cop_actual > 3.0:
+                Q_cooling = PARAMS_FISICOS['Q_max_cooling'] * 0.7
+            else:
+                Q_cooling = 0
+        else:
+            Q_cooling = 0
+        
+        # Convertir a potencia eléctrica (W)
+        if Q_cooling > 0:
+            P_electric = Q_cooling / max(cop_actual, 1e-6)
+        else:
+            P_electric = 0
+            
+        potencia_hvac.append(P_electric)
+    
+    return {
+        'time_hours': time_hours,
+        'temp_exterior': temp_exterior,
+        'temp_carcasa': temp_carcasa,
+        'potencia_hvac': potencia_hvac,
+        'potencia_max': float(MODELOS_REFRIGERACION[modelo_refrigeracion]['potencia_nominal'] / min([MODELOS_REFRIGERACION[modelo_refrigeracion]['cop_curve'](t) for t in range(15, 46)]))
+    }
+
 # Variable global para almacenar resultados de simulación en curso
 simulation_results = None
 
@@ -524,6 +637,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     energy_consumption_data = get_energy_consumption_data(temp_profiles)
     control_efficiency_data = get_control_efficiency_data(temp_profiles)
     cost_breakdown_data = get_cost_breakdown_data(costs, costs_servers)
+    temporal_analysis_data = get_temporal_analysis_data(temp_profiles, modelo_refrigeracion)
 
     # Generar datos horarios para el heatmap
     hourly_temps = []
@@ -569,6 +683,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'energy_consumption_data': energy_consumption_data,
         'control_efficiency_data': control_efficiency_data,
         'cost_breakdown_data': cost_breakdown_data,
+        'temporal_analysis_data': temporal_analysis_data,
         'simulation_time': round(time.time() - start_time, 2),
         'modelo_refrigeracion': modelo_info_serializable,
         'status': 'complete',
@@ -589,7 +704,8 @@ def index():
         'energy_consumption': 'Gráfico que muestra el consumo energético acumulado del sistema HVAC a lo largo del tiempo, permitiendo identificar períodos de mayor demanda energética y la eficiencia del sistema de control.',
         'temperature_vs_ambient': 'Correlación entre la temperatura exterior y la temperatura interior de la sala, mostrando cómo las condiciones climáticas afectan el rendimiento del sistema de refrigeración.',
         'control_efficiency': 'Análisis de la eficiencia del sistema de control, mostrando qué porcentaje del tiempo el HVAC está activo y cómo responde a las variaciones de temperatura.',
-        'cost_breakdown': 'Desglose detallado de los costos operativos, separando el consumo de los servidores del consumo del sistema HVAC, fundamental para análisis económicos.'
+        'cost_breakdown': 'Desglose detallado de los costos operativos, separando el consumo de los servidores del consumo del sistema HVAC, fundamental para análisis económicos.',
+        'temporal_analysis': 'Análisis temporal completo que muestra la evolución de la temperatura exterior, la temperatura de la carcasa del servidor y la potencia del sistema de refrigeración a lo largo del tiempo. Permite visualizar la respuesta dinámica del sistema HVAC a las condiciones climáticas y verificar el correcto funcionamiento del control térmico.'
     }
     
     # Modelos de refrigeración disponibles

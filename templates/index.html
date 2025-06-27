@@ -68,6 +68,22 @@
             </div>
             
             <div class="results-grid">
+                <div class="result-card full-width">
+                    <h3>Análisis Temporal - Rendimiento del Sistema de Refrigeración</h3>
+                    <div class="chart-container">
+                        <canvas id="temporal-analysis-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="temporal-analysis-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <div class="explanation-trigger" data-target="temporal-analysis-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="temporal-analysis-explanation" class="explanation-text">
+                            {{ explanations.temporal_analysis }}
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="result-card">
                     <h3>Curvas COP de Refrigeración</h3>
                     <div class="chart-container">

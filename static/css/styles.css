@@ -338,6 +338,10 @@ button.disabled {
     border: 1px solid var(--border-color);
 }
 
+.result-card.full-width {
+    grid-column: 1 / -1;
+}
+
 .result-card h3 {
     padding: 1rem;
     background-color: #f8f9fa;

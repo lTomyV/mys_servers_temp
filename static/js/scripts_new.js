@@ -404,6 +404,7 @@ function updateAllCharts(data) {
     if (data.energy_consumption_data) renderEnergyConsumptionChart(data.energy_consumption_data);
     if (data.control_efficiency_data) renderControlEfficiencyChart(data.control_efficiency_data);
     if (data.cost_breakdown_data) renderCostBreakdownChart(data.cost_breakdown_data);
+    if (data.temporal_analysis_data) renderTemporalAnalysisChart(data.temporal_analysis_data);
 
     document.querySelectorAll('.expand-chart-btn').forEach(button => {
         button.onclick = () => openChartInModal(button.dataset.chartCanvas);
@@ -1047,6 +1048,165 @@ function renderAmbientTempChart(data) {
                     },
                     min: Math.floor(data.min_temp) - 2,
                     max: Math.ceil(data.max_temp) + 2
+                }
+            }
+        }
+    });
+}
+
+function renderTemporalAnalysisChart(data) {
+    const canvasId = 'temporal-analysis-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`No se encontró el elemento canvas con id ${canvasId}`);
+        return;
+    }
+    
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    // Crear etiquetas de tiempo (primeros 7 días para mejor visualización)
+    const maxHours = Math.min(168, data.time_hours.length); // 7 días máximo
+    const timeLabels = data.time_hours.slice(0, maxHours).map(h => {
+        const day = Math.floor(h / 24) + 1;
+        const hour = Math.floor(h % 24);
+        return `Día ${day} ${hour}:00`;
+    });
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: timeLabels,
+            datasets: [
+                {
+                    label: 'Temperatura Exterior',
+                    data: data.temp_exterior.slice(0, maxHours),
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Temperatura Carcasa Servidor',
+                    data: data.temp_carcasa.slice(0, maxHours),
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    fill: false,
+                    tension: 0.2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Potencia HVAC',
+                    data: data.potencia_hvac.slice(0, maxHours).map(p => p / 1000), // Convertir a kW
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    fill: true,
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        boxWidth: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                if (context.dataset.label === 'Potencia HVAC') {
+                                    label += context.parsed.y.toFixed(1) + ' kW';
+                                } else {
+                                    label += context.parsed.y.toFixed(1) + '°C';
+                                }
+                            }
+                            return label;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        tempTarget: {
+                            type: 'line',
+                            yMin: 25,
+                            yMax: 25,
+                            borderColor: 'rgba(220, 53, 69, 0.5)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            label: {
+                                content: 'Objetivo ≤ 25°C',
+                                enabled: true,
+                                position: 'end'
+                            },
+                            scaleID: 'y'
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxRotation: 90,
+                        minRotation: 45,
+                        font: {
+                            size: 9
+                        },
+                        callback: function(value, index) {
+                            // Mostrar solo cada 12 horas para reducir el desorden
+                            return index % 12 === 0 ? this.getLabelForValue(value) : '';
+                        }
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Temperatura (°C)'
+                    },
+                    grid: {
+                        color: '#e0e0e0'
+                    },
+                    min: 15,
+                    max: 45
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Potencia HVAC (kW)'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    min: 0,
+                    max: Math.ceil((data.potencia_max || 30000) / 1000)
                 }
             }
         }
