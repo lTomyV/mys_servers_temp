@@ -345,7 +345,7 @@ function updateModeloInfo(modeloData) {
                 <span class="spec-value">${modeloData.potencia_nominal} W</span>
             </div>
             <div class="modelo-spec">
-                <span class="spec-label">Precio:</span>
+                <span class="spec-label">Costo de adquisición:</span>
                 <span class="spec-value">$${modeloData.precio}</span>
             </div>
             <div class="modelo-spec">
@@ -362,8 +362,8 @@ function updateModeloInfo(modeloData) {
 
 // Actualizar estadísticas
 function updateStatistics(data) {
-    // Actualizar estadísticas de costo
-    if (data.baseline_stats && data.optimized_stats && data.improvement) {
+    if (data.cost_stats) {
+        const s = data.cost_stats;
         const costStats = document.getElementById('cost-stats');
         if (costStats) {
             costStats.innerHTML = `
@@ -372,42 +372,15 @@ function updateStatistics(data) {
                     <thead>
                         <tr>
                             <th>Estadística</th>
-                            <th>Línea Base</th>
-                            <th>Optimizado</th>
-                            <th>Mejora</th>
+                            <th>Valor</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>Costo Promedio</td>
-                            <td>$${data.baseline_stats.mean.toFixed(2)}</td>
-                            <td>$${data.optimized_stats.mean.toFixed(2)}</td>
-                            <td class="improvement">${data.improvement.mean}%</td>
-                        </tr>
-                        <tr>
-                            <td>Costo90</td>
-                            <td>$${data.baseline_stats.costo90.toFixed(2)}</td>
-                            <td>$${data.optimized_stats.costo90.toFixed(2)}</td>
-                            <td class="improvement">${data.improvement.costo90}%</td>
-                        </tr>
-                        <tr>
-                            <td>Desviación Estándar</td>
-                            <td>$${data.baseline_stats.std.toFixed(2)}</td>
-                            <td>$${data.optimized_stats.std.toFixed(2)}</td>
-                            <td>-</td>
-                        </tr>
-                        <tr>
-                            <td>Costo Mínimo</td>
-                            <td>$${data.baseline_stats.min.toFixed(2)}</td>
-                            <td>$${data.optimized_stats.min.toFixed(2)}</td>
-                            <td>-</td>
-                        </tr>
-                        <tr>
-                            <td>Costo Máximo</td>
-                            <td>$${data.baseline_stats.max.toFixed(2)}</td>
-                            <td>$${data.optimized_stats.max.toFixed(2)}</td>
-                            <td>-</td>
-                        </tr>
+                        <tr><td>Promedio</td><td>$${s.mean.toFixed(2)}</td></tr>
+                        <tr><td>Costo90</td><td>$${s.costo90.toFixed(2)}</td></tr>
+                        <tr><td>Desviación Estándar</td><td>$${s.std.toFixed(2)}</td></tr>
+                        <tr><td>Mínimo</td><td>$${s.min.toFixed(2)}</td></tr>
+                        <tr><td>Máximo</td><td>$${s.max.toFixed(2)}</td></tr>
                     </tbody>
                 </table>
             `;
@@ -420,10 +393,9 @@ function updateAllCharts(data) {
     if (data.cop_curves_data) renderCopCurves(data.cop_curves_data);
     if (data.randomization_data) renderRandomizationChart(data.randomization_data);
     if (data.hourly_temp_data) renderHourlyTempChart(data.hourly_temp_data);
-    if (data.costs_baseline) updateCostHistogram('baseline-histogram', data.costs_baseline, 'Línea Base', data.baseline_stats);
-    if (data.costs_optimized) updateCostHistogram('optimized-histogram', data.costs_optimized, 'Optimizado', data.optimized_stats);
+    if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'Mensual', data.cost_stats);
+    if (data.costs_servers) updateCostHistogram('server-cost-histogram', data.costs_servers, 'Servidores', data.server_stats);
 
-    // Añadir listeners a los botones de expandir (se hace aquí para asegurar que los gráficos existen)
     document.querySelectorAll('.expand-chart-btn').forEach(button => {
         button.onclick = () => openChartInModal(button.dataset.chartCanvas);
     });
@@ -622,22 +594,25 @@ function updateCostHistogram(canvasId, costs, label, stats) {
     // Crear bins para el histograma
     const min = Math.min(...costs);
     const max = Math.max(...costs);
+    // Evitar bins de ancho cero cuando todos los costos son iguales
+    const adjustedMin = (min === max) ? min - 0.01 : min;
+    const adjustedMax = (min === max) ? max + 0.01 : max;
     const binCount = 15;
-    const binWidth = (max - min) / binCount;
+    const binWidth = (adjustedMax - adjustedMin) / binCount;
     
     const bins = Array(binCount).fill(0);
     const labels = [];
     
     // Crear etiquetas para los bins
     for (let i = 0; i < binCount; i++) {
-        const binStart = min + i * binWidth;
+        const binStart = adjustedMin + i * binWidth;
         const binEnd = binStart + binWidth;
         labels.push(`$${binStart.toFixed(2)}-$${binEnd.toFixed(2)}`);
     }
     
     // Contar valores en cada bin
     costs.forEach(value => {
-        const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
+        const binIndex = Math.min(Math.floor((value - adjustedMin) / binWidth), binCount - 1);
         bins[binIndex]++;
     });
     
@@ -688,8 +663,8 @@ function updateCostHistogram(canvasId, costs, label, stats) {
             datasets: [{
                 label: `Costo ${label}`,
                 data: bins,
-                backgroundColor: label === 'Línea Base' ? 'rgba(54, 162, 235, 0.6)' : 'rgba(75, 192, 192, 0.6)',
-                borderColor: label === 'Línea Base' ? 'rgba(54, 162, 235, 1)' : 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgba(75, 192, 192, 1)',
                 borderWidth: 1
             }]
         },

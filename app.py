@@ -16,16 +16,42 @@ import datetime
 from scipy.integrate import solve_ivp
 import threading
 import multiprocessing
+import glob
 
 app = Flask(__name__)
+
+# Directorio con archivos JSON de Open-Meteo (uno por año)
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+
+def _load_hourly_temps(path):
+    """Lee un JSON Open-Meteo y devuelve np.array(744) en Kelvin."""
+    with open(path, 'r', encoding='utf-8') as f:
+        j = json.load(f)
+    temps_c = np.array(j['hourly']['temperature_2m'], dtype=float)
+    return temps_c + 273.15
+
+# Cargar todas las series disponibles
+HOURLY_TEMPS_SERIES = []
+for file in glob.glob(os.path.join(DATA_DIR, 'santa_fe_*_01.json')):
+    try:
+        HOURLY_TEMPS_SERIES.append(_load_hourly_temps(file))
+    except Exception as e:
+        print(f"No se pudo cargar {file}: {e}")
+
+def _get_random_hourly_series():
+    """Devuelve una serie horaria aleatoria o None si no hay datos."""
+    if HOURLY_TEMPS_SERIES:
+        idx = np.random.randint(0, len(HOURLY_TEMPS_SERIES))
+        return HOURLY_TEMPS_SERIES[idx]
+    return None
 
 # Parámetros físicos del modelo
 PARAMS_FISICOS = {
     'A': 126,  # Área de superficie externa (m^2)
-    'U': 2.5,  # Coeficiente de transferencia de calor (W/m^2.K)
-    'Q_servers': 10000,  # Carga térmica de los servidores (W)
-    'C_th': 150000,  # Capacidad térmica de la sala (J/K)
-    'Q_max_cooling': 15000,  # Potencia máxima de refrigeración del HVAC (W)
+    'U': 5.5,  # Coeficiente de transferencia de calor (W/m^2.K)
+    'Q_servers': 45000,  # Carga térmica de los servidores (W)
+    'C_th': 2_000_000,  # Capacidad térmica realista de la sala (J/K)
+    'Q_max_cooling': 30000,  # Potencia máxima del HVAC (W)
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
 }
 
@@ -42,30 +68,31 @@ PARAMS_CLIMA = {
 MODELOS_REFRIGERACION = {
     'economico': {
         'nombre': 'Economico (Estándar)',
-        'cop_nominal': 3.2,  # COP a 35°C exterior
+        'cop_nominal': 2.8,  # COP a 35°C exterior
         'potencia_nominal': 15000,  # W
         'precio': 2500,  # USD
         'vida_util': 8,  # años
         'mantenimiento_anual': 200,  # USD/año
-        'cop_curve': lambda t: max(1.0, 4.5 - 0.12 * (t - 20)) if t <= 45 else 1.0  # t en °C
+        # COP ≈ 2.8 @35°C; cae 0.05 por °C hacia arriba
+        'cop_curve': lambda t: max(1.0, 2.8 - 0.05 * (t - 35))
     },
     'eficiente': {
         'nombre': 'Eficiente (Inverter)',
-        'cop_nominal': 4.5,  # COP a 35°C exterior
+        'cop_nominal': 3.2,  # COP a 35°C exterior
         'potencia_nominal': 15000,  # W
         'precio': 4200,  # USD
         'vida_util': 12,  # años
         'mantenimiento_anual': 150,  # USD/año
-        'cop_curve': lambda t: max(1.5, 5.8 - 0.08 * (t - 20)) if t <= 45 else 1.5  # t en °C
+        'cop_curve': lambda t: max(1.2, 3.2 - 0.06 * (t - 35))
     },
     'premium': {
         'nombre': 'Premium (VRF)',
-        'cop_nominal': 5.2,  # COP a 35°C exterior
+        'cop_nominal': 3.8,  # COP a 35°C exterior
         'potencia_nominal': 15000,  # W
         'precio': 6800,  # USD
         'vida_util': 15,  # años
         'mantenimiento_anual': 120,  # USD/año
-        'cop_curve': lambda t: max(2.0, 6.5 - 0.06 * (t - 20)) if t <= 45 else 2.0  # t en °C
+        'cop_curve': lambda t: max(1.5, 3.8 - 0.07 * (t - 35))
     }
 }
 
@@ -94,15 +121,19 @@ def perfil_temperatura_diaria(t, t_min, t_max):
 
 # Esta función debe estar en el nivel superior para que multiprocessing funcione
 def run_single_simulation(args):
-    """Ejecuta una única instancia de simulación para su procesamiento en paralelo."""
-    estrategia, t_min_profile, t_max_profile, modelo_refrigeracion, fisico_params = args
+    """Ejecuta una única instancia de simulación (apta para multiprocessing)."""
+    if len(args) == 6:
+        estrategia, t_min_profile, t_max_profile, modelo_refrigeracion, fisico_params, hourly_series = args
+    else:
+        estrategia, t_min_profile, t_max_profile, modelo_refrigeracion, fisico_params = args
+        hourly_series = _get_random_hourly_series()
     
     t_final = 31 * 86400
     y0 = [297.15, 0]  # 24°C, 0 kWh
     t_eval = np.arange(0, t_final, 3600)
     
     sol = solve_ivp(
-        lambda t, y: modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, fisico_params),
+        lambda t, y: modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, fisico_params, hourly_series),
         [0, t_final],
         y0,
         t_eval=t_eval,
@@ -113,7 +144,8 @@ def run_single_simulation(args):
     
     T_room_profile = sol.y[0]
     energia_total = sol.y[1][-1]
-    costo = (energia_total / 3.6e6) * fisico_params['costo_kWh']
+    total_energia = energia_total + fisico_params['Q_servers'] * t_final
+    costo = (total_energia / 3.6e6) * fisico_params['costo_kWh']
     
     temp_profile_data = {
         'tiempo': sol.t.tolist(),
@@ -125,7 +157,7 @@ def run_single_simulation(args):
     return costo, temp_profile_data
 
 # Modelo físico de la sala de servidores (refactorizado para no usar globales)
-def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, params_fisicos):
+def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, params_fisicos, hourly_series=None):
     """
     Modelo dinámico de la sala de servidores.
     
@@ -136,6 +168,7 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     estrategia: 'LineaBase' o 'Optimizado'
     modelo_refrigeracion: modelo de equipo de refrigeración a utilizar
     params_fisicos: parámetros físicos del modelo
+    hourly_series: serie horaria aleatoria o None si no hay datos
     
     Retorna:
     dy/dt: derivadas de las variables de estado
@@ -146,7 +179,11 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     dia = min(int(t / 86400), 30)
     
     # Obtener temperatura ambiente actual
-    T_ambient = perfil_temperatura_diaria(t, t_min_profile[dia], t_max_profile[dia])
+    if hourly_series is not None and len(hourly_series) >= 744:
+        idx = int(t // 3600) % 744
+        T_ambient = hourly_series[idx]
+    else:
+        T_ambient = perfil_temperatura_diaria(t, t_min_profile[dia], t_max_profile[dia])
     
     # Calor transmitido desde el exterior
     Q_transmission = params_fisicos['A'] * params_fisicos['U'] * (T_ambient - T_room)
@@ -222,10 +259,21 @@ def run_monte_carlo_simulation(estrategia, num_simulations=100, modelo_refrigera
 # Función para generar perfiles climáticos
 def generate_weather_profile():
     """Genera un perfil de 31 días de T_min y T_max."""
+    # Si disponemos de la serie real, derivar min y max diarios de ella
+    if HOURLY_TEMPS_SERIES:
+        t_min_profile = []
+        t_max_profile = []
+        for d in range(31):
+            series = HOURLY_TEMPS_SERIES[np.random.randint(0, len(HOURLY_TEMPS_SERIES))]
+            day_slice = series[d*24:(d+1)*24]
+            t_min_profile.append(float(np.min(day_slice)))
+            t_max_profile.append(float(np.max(day_slice)))
+        return np.array(t_min_profile), np.array(t_max_profile)
+
+    # Fallback estocástico si no hay datos reales
     t_min_profile = np.random.normal(PARAMS_CLIMA['TMIN_MU'], PARAMS_CLIMA['TMIN_SIGMA'], 31) + 273.15
     delta_t_profile = np.random.normal(PARAMS_CLIMA['DELTAT_MU'], PARAMS_CLIMA['DELTAT_SIGMA'], 31)
-    # Asegurar que delta_t no sea negativo
-    delta_t_profile[delta_t_profile < 0] = 0
+    delta_t_profile = np.clip(delta_t_profile, 6, 15)  # acotar a rango físico
     t_max_profile = t_min_profile + delta_t_profile
     return t_min_profile, t_max_profile
 
@@ -325,69 +373,56 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     start_time = time.time()
     
     # Número de simulaciones para esta demo (reducido para velocidad)
-    num_simulations = 30
-    
-    # Ejecutar simulaciones para ambas estrategias
-    costs_baseline, temp_profiles_baseline = run_monte_carlo_simulation("LineaBase", num_simulations, modelo_refrigeracion)
-    baseline_stats = calculate_cost_statistics(costs_baseline)
-    
-    costs_optimized, temp_profiles_optimized = run_monte_carlo_simulation("Optimizado", num_simulations, modelo_refrigeracion)
-    optimized_stats = calculate_cost_statistics(costs_optimized)
-    
+    num_simulations = 200
+
+    # Ejecutar simulaciones (una sola estrategia de control)
+    costs, temp_profiles = run_monte_carlo_simulation("Optimizado", num_simulations, modelo_refrigeracion)
+    cost_stats = calculate_cost_statistics(costs)
+
     # Análisis de temperaturas
-    temp_stats = calculate_temperature_statistics(temp_profiles_baseline)
-    
+    temp_stats = calculate_temperature_statistics(temp_profiles)
+
     # Generar datos para los gráficos
-    randomization_data = get_randomization_diagnostic_data(temp_profiles_baseline)
+    randomization_data = get_randomization_diagnostic_data(temp_profiles)
     hourly_temp_data = get_hourly_temperature_distribution_data(temp_stats)
     cop_curves_data = get_cop_curves_data()
-    
-    # Calcular mejora porcentual
-    improvement = {
-        'mean': round((1 - optimized_stats['mean'] / baseline_stats['mean']) * 100, 2) if baseline_stats['mean'] > 0 else 0,
-        'costo90': round((1 - optimized_stats['costo90'] / baseline_stats['costo90']) * 100, 2) if baseline_stats['costo90'] > 0 else 0
-    }
-    
+
     # Generar datos horarios para el heatmap
     hourly_temps = []
     for day in range(31):
         for hour in range(24):
-            # Tomar una muestra aleatoria de los perfiles de temperatura
-            if temp_profiles_baseline:
-                profile_idx = np.random.randint(0, len(temp_profiles_baseline))
-                profile = temp_profiles_baseline[profile_idx]
-                
-                # Calcular el índice correspondiente a este día y hora
+            if temp_profiles:
+                profile_idx = np.random.randint(0, len(temp_profiles))
+                profile = temp_profiles[profile_idx]
                 idx = day * 24 + hour
                 if idx < len(profile['tiempo']):
-                    temp = profile['T_room'][idx] - 273.15  # Convertir a Celsius
-                    
-                    hourly_temps.append({
-                        'day': day + 1,
-                        'hour': hour,
-                        'temperature': round(temp, 2)
-                    })
-    
+                    temp = profile['T_room'][idx] - 273.15
+                    hourly_temps.append({'day': day + 1, 'hour': hour, 'temperature': round(temp, 2)})
+
     # Preparar respuesta
-    
-    # Crear una copia serializable del modelo de refrigeración
+
     modelo_info_serializable = MODELOS_REFRIGERACION[modelo_refrigeracion].copy()
     if 'cop_curve' in modelo_info_serializable:
         del modelo_info_serializable['cop_curve']
-        
+
+    # Costo eléctrico de los servidores (constante por simulación)
+    servidor_kwh = (PARAMS_FISICOS['Q_servers'] * 744) / 1000  # kWh mes
+    cost_servidores = servidor_kwh * PARAMS_FISICOS['costo_kWh']
+    costs_servers = [cost_servidores] * num_simulations
+    server_stats = calculate_cost_statistics(costs_servers)
+
     simulation_results = {
         'hourly_temps': hourly_temps,
-        'costs_baseline': costs_baseline,
-        'costs_optimized': costs_optimized,
-        'baseline_stats': baseline_stats,
-        'optimized_stats': optimized_stats,
-        'improvement': improvement,
+        'costs': costs,
+        'cost_stats': cost_stats,
         'randomization_data': randomization_data,
         'hourly_temp_data': hourly_temp_data,
         'cop_curves_data': cop_curves_data,
         'simulation_time': round(time.time() - start_time, 2),
         'modelo_refrigeracion': modelo_info_serializable,
-        'status': 'complete'
+        'status': 'complete',
+        'costs_servers': costs_servers,
+        'server_stats': server_stats
     }
 
 @app.route('/')
@@ -395,8 +430,7 @@ def index():
     # Obtener explicaciones de los gráficos
     explanations = {
         'temperature_distribution': 'Este gráfico muestra la distribución de temperaturas horarias durante el mes de enero. La curva representa la temperatura media para cada hora del día, permitiendo identificar los momentos más fríos y cálidos.',
-        'cost_baseline': 'Este histograma muestra la distribución de probabilidad del costo mensual de energía utilizando la estrategia de línea base (termostato simple). La línea roja indica el costo promedio, mientras que la línea púrpura muestra el Costo90, que representa el valor que no será excedido con un 90% de probabilidad.',
-        'cost_optimized': 'Este histograma muestra la distribución de probabilidad del costo mensual de energía utilizando la estrategia optimizada (pre-enfriamiento predictivo). Comparado con la línea base, se observa un desplazamiento hacia costos menores y una reducción en la variabilidad.',
+        'cost_monthly': 'Este histograma muestra la distribución de probabilidad del costo mensual de energía del sistema completo (servidores + HVAC) para el mes de enero. La línea roja indica el costo promedio, mientras que la línea púrpura muestra el Costo90 (valor no superado con el 90% de probabilidad).',
         'randomization': 'Este gráfico valida científicamente la calidad de la randomización utilizada en las simulaciones de Monte Carlo, mostrando que las temperaturas generadas siguen distribuciones normales y pasan pruebas estadísticas de normalidad (Q-Q plots).',
         'cop_curves': 'Este gráfico muestra las curvas de Coeficiente de Rendimiento (COP) para diferentes modelos de equipos de refrigeración. El COP indica cuánta energía de refrigeración se produce por cada unidad de energía eléctrica consumida. Un COP más alto significa mayor eficiencia.'
     }

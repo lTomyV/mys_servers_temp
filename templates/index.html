@@ -117,33 +117,33 @@
                 </div>
                 
                 <div class="result-card">
-                    <h3>Histograma de Costos - Línea Base</h3>
+                    <h3>Histograma de Costos</h3>
                     <div class="chart-container">
-                        <canvas id="baseline-histogram"></canvas>
-                        <button class="expand-chart-btn" data-chart-canvas="baseline-histogram">
+                        <canvas id="cost-histogram"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="cost-histogram">
                             <i class="fas fa-expand-arrows-alt"></i>
                         </button>
-                        <div class="explanation-trigger" data-target="cost-baseline-explanation">
+                        <div class="explanation-trigger" data-target="cost-monthly-explanation">
                             <span class="info-icon">i</span>
                         </div>
-                        <div id="cost-baseline-explanation" class="explanation-text">
-                            {{ explanations.cost_baseline }}
+                        <div id="cost-monthly-explanation" class="explanation-text">
+                            {{ explanations.cost_monthly }}
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="result-card">
-                    <h3>Histograma de Costos - Optimizado</h3>
+                    <h3>Histograma de Costo Servidores</h3>
                     <div class="chart-container">
-                        <canvas id="optimized-histogram"></canvas>
-                        <button class="expand-chart-btn" data-chart-canvas="optimized-histogram">
+                        <canvas id="server-cost-histogram"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="server-cost-histogram">
                             <i class="fas fa-expand-arrows-alt"></i>
                         </button>
-                        <div class="explanation-trigger" data-target="cost-optimized-explanation">
+                        <div class="explanation-trigger" data-target="cost-server-explanation">
                             <span class="info-icon">i</span>
                         </div>
-                        <div id="cost-optimized-explanation" class="explanation-text">
-                            {{ explanations.cost_optimized }}
+                        <div id="cost-server-explanation" class="explanation-text">
+                            Costo mensual de la energía consumida exclusivamente por los servidores.
                         </div>
                     </div>
                 </div>
@@ -170,29 +170,6 @@
                         <li>Q<sub>cooling</sub>: Potencia de refrigeración [W]</li>
                         <li>C<sub>th</sub>: Capacidad térmica de la sala [J/K]</li>
                     </ul>
-                </div>
-                
-                <div class="tech-card">
-                    <h3>Estrategias de Control</h3>
-                    <div class="strategy-comparison">
-                        <div class="strategy">
-                            <h4>Línea Base</h4>
-                            <p>Control termostático simple:</p>
-                            <ul>
-                                <li>Si T > 24°C → Refrigeración ON</li>
-                                <li>Si T ≤ 24°C → Refrigeración OFF</li>
-                            </ul>
-                        </div>
-                        <div class="strategy">
-                            <h4>Optimizado</h4>
-                            <p>Pre-enfriamiento predictivo:</p>
-                            <ul>
-                                <li>Si T > 26°C → Refrigeración ON</li>
-                                <li>Si T > 22°C y COP > 3.0 → Refrigeración ON</li>
-                                <li>En otro caso → Refrigeración OFF</li>
-                            </ul>
-                        </div>
-                    </div>
                 </div>
                 
                 <div class="tech-card">
