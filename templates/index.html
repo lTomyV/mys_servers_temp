@@ -85,7 +85,7 @@
                 </div>
                 
                 <div class="result-card">
-                    <h3>Diagnóstico de Randomización</h3>
+                    <h3>Temperaturas Exteriores (Validación Climática)</h3>
                     <div class="chart-container">
                         <canvas id="randomization-chart"></canvas>
                         <button class="expand-chart-btn" data-chart-canvas="randomization-chart">
@@ -101,7 +101,7 @@
                 </div>
                 
                 <div class="result-card">
-                    <h3>Distribución de Temperaturas Horarias</h3>
+                    <h3>Distribución de Temperaturas Horarias (Interior Sala)</h3>
                     <div class="chart-container">
                         <canvas id="hourly-temp-chart"></canvas>
                         <button class="expand-chart-btn" data-chart-canvas="hourly-temp-chart">
@@ -117,7 +117,23 @@
                 </div>
                 
                 <div class="result-card">
-                    <h3>Temperatura Máxima Diaria (Promedio)</h3>
+                    <h3>Distribución de Temperaturas Exteriores (Santa Fe)</h3>
+                    <div class="chart-container">
+                        <canvas id="ambient-temp-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="ambient-temp-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <div class="explanation-trigger" data-target="ambient-temperature-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="ambient-temperature-explanation" class="explanation-text">
+                            Muestra las temperaturas exteriores promedio por hora del día en Santa Fe. Estas son las condiciones climáticas contra las que debe trabajar el sistema de refrigeración. Note cómo las temperaturas interiores de la sala se mantienen mucho más bajas y estables.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Temperatura Máxima Diaria Interior (Promedio)</h3>
                     <div class="chart-container">
                         <canvas id="daily-max-chart"></canvas>
                         <button class="expand-chart-btn" data-chart-canvas="daily-max-chart">

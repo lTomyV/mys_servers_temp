@@ -51,7 +51,7 @@ PARAMS_FISICOS = {
     'U': 5.5,  # Coeficiente de transferencia de calor (W/m^2.K)
     'Q_servers': 45000,  # Carga térmica de los servidores (W)
     'C_th': 2_000_000,  # Capacidad térmica realista de la sala (J/K)
-    'Q_max_cooling': 60000,  # Potencia máxima del HVAC (W)
+    'Q_max_cooling': 75000,  # Potencia máxima del HVAC (W) - aumentada de 60kW a 75kW
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
 }
 
@@ -69,29 +69,29 @@ MODELOS_REFRIGERACION = {
     'economico': {
         'nombre': 'Economico (Estándar)',
         'cop_nominal': 2.8,  # COP a 35°C exterior
-        'potencia_nominal': 60000,  # W
-        'precio': 2500,  # USD
+        'potencia_nominal': 75000,  # W - aumentada de 60kW a 75kW
+        'precio': 3000,  # USD - ajustado por mayor capacidad
         'vida_util': 8,  # años
-        'mantenimiento_anual': 200,  # USD/año
+        'mantenimiento_anual': 250,  # USD/año - ajustado
         # COP ≈ 2.8 @35°C; cae 0.05 por °C hacia arriba
         'cop_curve': lambda t: max(1.0, 2.8 - 0.05 * (t - 35))
     },
     'eficiente': {
         'nombre': 'Eficiente (Inverter)',
         'cop_nominal': 3.2,  # COP a 35°C exterior
-        'potencia_nominal': 60000,  # W
-        'precio': 4200,  # USD
+        'potencia_nominal': 75000,  # W - aumentada de 60kW a 75kW
+        'precio': 5000,  # USD - ajustado por mayor capacidad
         'vida_util': 12,  # años
-        'mantenimiento_anual': 150,  # USD/año
+        'mantenimiento_anual': 180,  # USD/año - ajustado
         'cop_curve': lambda t: max(1.2, 3.2 - 0.06 * (t - 35))
     },
     'premium': {
         'nombre': 'Premium (VRF)',
         'cop_nominal': 3.8,  # COP a 35°C exterior
-        'potencia_nominal': 60000,  # W
-        'precio': 6800,  # USD
+        'potencia_nominal': 75000,  # W - aumentada de 60kW a 75kW
+        'precio': 8000,  # USD - ajustado por mayor capacidad
         'vida_util': 15,  # años
-        'mantenimiento_anual': 120,  # USD/año
+        'mantenimiento_anual': 150,  # USD/año - ajustado
         'cop_curve': lambda t: max(1.5, 3.8 - 0.07 * (t - 35))
     }
 }
@@ -169,7 +169,7 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     t: tiempo actual (s)
     y: vector de estado [T_room, energia_total]
     t_min_profile, t_max_profile: perfiles de temperatura min/max diarios
-    estrategia: 'LineaBase' o 'Optimizado'
+    estrategia: parámetro heredado (ya no se usa)
     modelo_refrigeracion: modelo de equipo de refrigeración a utilizar
     params_fisicos: parámetros físicos del modelo
     hourly_series: serie horaria aleatoria o None si no hay datos
@@ -192,29 +192,30 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     # Calor transmitido desde el exterior
     Q_transmission = params_fisicos['A'] * params_fisicos['U'] * (T_ambient - T_room)
     
-    # Lógica de control según estrategia
-    if estrategia == 'LineaBase':
-        # Estrategia de termostato simple
-        if T_room > 24.0:
+    # Estrategia de control robusta con límites estrictos para sala de servidores
+    T_setpoint_critico = 24.0  # Límite crítico absoluto
+    T_setpoint_normal = 22.0   # Límite normal de operación
+    T_setpoint_precool = 20.0  # Inicio de pre-enfriamiento
+
+    # Calcular COP actual
+    cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
+
+    # Control por niveles de temperatura
+    if T_room > T_setpoint_critico:
+        # EMERGENCIA: Temperatura crítica - HVAC al máximo
+        Q_cooling = params_fisicos['Q_max_cooling']
+    elif T_room > T_setpoint_normal:
+        # ALTO: Supera límite normal - HVAC al máximo
+        Q_cooling = params_fisicos['Q_max_cooling']
+    elif T_room > T_setpoint_precool:
+        # MEDIO: Pre-enfriamiento inteligente
+        if cop_actual > 2.5:  # Umbral más bajo para mayor actividad
             Q_cooling = params_fisicos['Q_max_cooling']
         else:
             Q_cooling = 0
-    else:  # Optimizado
-        # Estrategia de pre-enfriamiento con banda muerta
-        T_setpoint_normal = 24.0
-        T_setpoint_precool = 21.0
-
-        # Calcular COP actual
-        cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
-
-        # Siempre enfriar si superamos el setpoint normal (límite estricto)
-        if T_room > T_setpoint_normal:
-            Q_cooling = params_fisicos['Q_max_cooling']
-        # Si estamos por debajo del límite, pre-enfriamos solo si es muy eficiente
-        elif T_room > T_setpoint_precool and cop_actual > 3.5:
-            Q_cooling = params_fisicos['Q_max_cooling']  # Enfriar solo si es muy eficiente
-        else:
-            Q_cooling = 0
+    else:
+        # BAJO: Temperatura óptima - HVAC apagado
+        Q_cooling = 0
     
     # Derivada de la temperatura
     dT_room_dt = (params_fisicos['Q_servers'] + Q_transmission - Q_cooling) / params_fisicos['C_th']
@@ -349,6 +350,35 @@ def get_hourly_temperature_distribution_data(temp_stats):
         'max_hour': temp_stats['max_hour']
     }
 
+def get_ambient_temperature_distribution_data():
+    """Prepara datos para mostrar la distribución de temperaturas exteriores."""
+    if not HOURLY_TEMPS_SERIES:
+        return {'hourly_means': [], 'min_temp': 0, 'max_temp': 40}
+    
+    # Tomar una muestra de series para calcular el promedio horario
+    hourly_temps = [[] for _ in range(24)]
+    
+    for series in HOURLY_TEMPS_SERIES[:5]:  # Usar las primeras 5 series
+        for day in range(31):  # 31 días
+            for hour in range(24):
+                idx = day * 24 + hour
+                if idx < len(series):
+                    hourly_temps[hour].append(series[idx])
+    
+    # Calcular medias horarias
+    hourly_means = [np.mean(temps) if temps else 20 for temps in hourly_temps]
+    
+    # Encontrar temperaturas extremas
+    all_temps = [temp for series in HOURLY_TEMPS_SERIES[:5] for temp in series]
+    min_temp = min(all_temps) if all_temps else 15
+    max_temp = max(all_temps) if all_temps else 35
+    
+    return {
+        'hourly_means': hourly_means,
+        'min_temp': min_temp,
+        'max_temp': max_temp
+    }
+
 def get_cop_curves_data():
     """Prepara datos para el gráfico de curvas COP."""
     temps = np.linspace(15, 45, 100).tolist()
@@ -469,8 +499,8 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     # Número de simulaciones para esta demo (reducido para velocidad)
     num_simulations = 200
 
-    # Ejecutar simulaciones (una sola estrategia de control)
-    costs, temp_profiles = run_monte_carlo_simulation("Optimizado", num_simulations, modelo_refrigeracion)
+    # Ejecutar simulaciones (una sola estrategia de control robusta)
+    costs, temp_profiles = run_monte_carlo_simulation("SalaServidores", num_simulations, modelo_refrigeracion)
     cost_stats = calculate_cost_statistics(costs)
 
     # Análisis de temperaturas
@@ -485,6 +515,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     # Generar datos para los gráficos
     randomization_data = get_randomization_diagnostic_data(temp_profiles)
     hourly_temp_data = get_hourly_temperature_distribution_data(temp_stats)
+    ambient_temp_data = get_ambient_temperature_distribution_data()
     cop_curves_data = get_cop_curves_data()
     
     # Nuevos gráficos educativos
@@ -531,6 +562,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'cost_stats': cost_stats,
         'randomization_data': randomization_data,
         'hourly_temp_data': hourly_temp_data,
+        'ambient_temp_data': ambient_temp_data,
         'cop_curves_data': cop_curves_data,
         'energy_consumption_data': energy_consumption_data,
         'control_efficiency_data': control_efficiency_data,
@@ -538,9 +570,9 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'simulation_time': round(time.time() - start_time, 2),
         'modelo_refrigeracion': modelo_info_serializable,
         'status': 'complete',
+        'daily_max_avg': daily_max_avg,
         'costs_servers': costs_servers,
-        'server_stats': server_stats,
-        'daily_max_avg': daily_max_avg
+        'server_stats': server_stats
     }
 
 @app.route('/')
@@ -549,7 +581,7 @@ def index():
     explanations = {
         'temperature_distribution': 'Este gráfico muestra la distribución de temperaturas horarias durante el mes de enero. La curva representa la temperatura media para cada hora del día, permitiendo identificar los momentos más fríos y cálidos.',
         'cost_monthly': 'Este histograma muestra la distribución de probabilidad del costo mensual de energía del sistema completo (servidores + HVAC) para el mes de enero. La línea roja indica el costo promedio, mientras que la línea púrpura muestra el Costo90 (valor no superado con el 90% de probabilidad).',
-        'randomization': 'Este gráfico valida científicamente la calidad de la randomización utilizada en las simulaciones de Monte Carlo, mostrando que las temperaturas generadas siguen distribuciones normales y pasan pruebas estadísticas de normalidad (Q-Q plots).',
+        'randomization': 'Este gráfico valida científicamente la calidad de la randomización utilizada en las simulaciones de Monte Carlo, mostrando las distribuciones de temperaturas EXTERIORES (ambiente) de Santa Fe que alimentan el modelo. Las temperaturas mostradas son del clima exterior, no del interior de la sala.',
         'cop_curves': 'Este gráfico muestra las curvas de Coeficiente de Rendimiento (COP) para diferentes modelos de equipos de refrigeración. El COP indica cuánta energía de refrigeración se produce por cada unidad de energía eléctrica consumida. Un COP más alto significa mayor eficiencia.',
         'daily_max_temp': 'Este gráfico muestra la temperatura máxima diaria promedio de la sala de servidores durante el mes. Permite identificar patrones de comportamiento térmico y verificar que el sistema de control mantiene las temperaturas dentro de rangos seguros (típicamente 18-26°C para centros de datos).',
         'energy_consumption': 'Gráfico que muestra el consumo energético acumulado del sistema HVAC a lo largo del tiempo, permitiendo identificar períodos de mayor demanda energética y la eficiencia del sistema de control.',

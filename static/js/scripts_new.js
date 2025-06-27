@@ -390,10 +390,13 @@ function updateStatistics(data) {
 
 // Actualizar todos los gráficos
 function updateAllCharts(data) {
-    if (data.cop_curves_data) renderCopCurves(data.cop_curves_data);
-    if (data.randomization_data) renderRandomizationChart(data.randomization_data);
+    console.log("Actualizando gráficos con datos:", data);
+    
     if (data.hourly_temp_data) renderHourlyTempChart(data.hourly_temp_data);
-    if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'Mensual', data.cost_stats);
+    if (data.ambient_temp_data) renderAmbientTempChart(data.ambient_temp_data);
+    if (data.randomization_data) renderRandomizationChart(data.randomization_data);
+    if (data.cop_curves_data) renderCopCurves(data.cop_curves_data);
+    if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'HVAC', data.cost_stats);
     if (data.costs_servers) updateCostHistogram('server-cost-histogram', data.costs_servers, 'Servidores', data.server_stats);
     if (data.daily_max_avg) renderDailyMaxChart(data.daily_max_avg);
     
@@ -985,6 +988,64 @@ function renderCostBreakdownChart(data) {
                             return `${label}: $${value.toFixed(2)} (${percentage.toFixed(1)}%)`;
                         }
                     }
+                }
+            }
+        }
+    });
+}
+
+function renderAmbientTempChart(data) {
+    const ctx = document.getElementById('ambient-temp-chart');
+    if (!ctx) {
+        console.error("No se encontró el canvas 'ambient-temp-chart'");
+        return;
+    }
+    
+    // Destruir gráfico existente si existe
+    if (chartInstances.ambientTemp) {
+        chartInstances.ambientTemp.destroy();
+    }
+    
+    // Crear datos del gráfico
+    const labels = [];
+    for (let i = 0; i < 24; i++) {
+        labels.push(i.toString().padStart(2, '0') + ':00');
+    }
+    
+    chartInstances.ambientTemp = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Temperatura Externa Media (°C)',
+                data: data.hourly_means,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            ...defaultChartOptions,
+            plugins: {
+                ...defaultChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: `Rango: ${data.min_temp.toFixed(1)}°C - ${data.max_temp.toFixed(1)}°C`
+                }
+            },
+            scales: {
+                ...defaultChartOptions.scales,
+                y: {
+                    ...defaultChartOptions.scales.y,
+                    title: {
+                        display: true,
+                        text: 'Temperatura (°C)'
+                    },
+                    min: Math.floor(data.min_temp) - 2,
+                    max: Math.ceil(data.max_temp) + 2
                 }
             }
         }
