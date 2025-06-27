@@ -369,6 +369,94 @@ def get_cop_curves_data():
         
     return {'temps': temps, 'curves': curves}
 
+def get_energy_consumption_data(temp_profiles):
+    """Prepara datos para el gráfico de consumo energético acumulado."""
+    if not temp_profiles:
+        return {'time_hours': [], 'energy_cumulative': []}
+    
+    # Tomar el primer perfil como ejemplo
+    profile = temp_profiles[0]
+    time_hours = [t/3600 for t in profile['tiempo']]  # Convertir a horas
+    
+    # Simular consumo energético basado en diferencias de temperatura
+    energy_cumulative = []
+    cumulative = 0
+    
+    for i, t in enumerate(profile['tiempo']):
+        if i > 0:
+            # Estimar consumo basado en la actividad del HVAC
+            temp_diff = abs(profile['T_room'][i] - 22)  # Diferencia con temperatura objetivo
+            if temp_diff > 2:  # HVAC activo
+                power_consumption = 15  # kW aproximado
+                time_step = (profile['tiempo'][i] - profile['tiempo'][i-1]) / 3600  # horas
+                cumulative += power_consumption * time_step
+        energy_cumulative.append(cumulative)
+    
+    return {'time_hours': time_hours, 'energy_cumulative': energy_cumulative}
+
+def get_temperature_vs_ambient_data(temp_profiles):
+    """Prepara datos para correlación temperatura interior vs exterior."""
+    if not temp_profiles:
+        return {'ambient_temps': [], 'room_temps': []}
+    
+    ambient_temps = []
+    room_temps = []
+    
+    # Tomar muestras de varios perfiles
+    for profile in temp_profiles[:3]:  # Usar los primeros 3 perfiles
+        for i in range(0, len(profile['T_room']), 24):  # Muestras diarias
+            if i < len(profile['T_min']):
+                # Usar temperatura máxima del día como representativa
+                ambient_temp = profile['T_max'][min(i//24, len(profile['T_max'])-1)]
+                room_temp = profile['T_room'][i]
+                ambient_temps.append(ambient_temp)
+                room_temps.append(room_temp)
+    
+    return {'ambient_temps': ambient_temps, 'room_temps': room_temps}
+
+def get_control_efficiency_data(temp_profiles):
+    """Prepara datos para análisis de eficiencia del control."""
+    if not temp_profiles:
+        return {'hours': [], 'hvac_active': [], 'efficiency_score': 0}
+    
+    profile = temp_profiles[0]
+    hours = list(range(24))
+    hvac_active_by_hour = [0] * 24
+    
+    # Analizar actividad del HVAC por hora del día
+    for i, t in enumerate(profile['tiempo']):
+        hour = int((t % 86400) / 3600)
+        temp = profile['T_room'][i]
+        
+        # Estimar si HVAC está activo (temperatura fuera del rango óptimo)
+        if temp > 24 or temp < 21:
+            hvac_active_by_hour[hour] += 1
+    
+    # Normalizar a porcentaje
+    total_samples_per_hour = len(profile['tiempo']) // 24
+    hvac_active_percent = [count / max(total_samples_per_hour, 1) * 100 for count in hvac_active_by_hour]
+    
+    # Calcular score de eficiencia (menor actividad = mayor eficiencia)
+    efficiency_score = 100 - np.mean(hvac_active_percent)
+    
+    return {
+        'hours': hours, 
+        'hvac_active': hvac_active_percent,
+        'efficiency_score': round(efficiency_score, 1)
+    }
+
+def get_cost_breakdown_data(costs_hvac, costs_servers):
+    """Prepara datos para el desglose de costos."""
+    return {
+        'hvac_costs': costs_hvac,
+        'server_costs': costs_servers,
+        'hvac_mean': float(np.mean(costs_hvac)),
+        'server_mean': float(np.mean(costs_servers)),
+        'total_mean': float(np.mean(costs_hvac) + np.mean(costs_servers)),
+        'hvac_percentage': float(np.mean(costs_hvac) / (np.mean(costs_hvac) + np.mean(costs_servers)) * 100),
+        'server_percentage': float(np.mean(costs_servers) / (np.mean(costs_hvac) + np.mean(costs_servers)) * 100)
+    }
+
 # Variable global para almacenar resultados de simulación en curso
 simulation_results = None
 
@@ -388,10 +476,21 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     # Análisis de temperaturas
     temp_stats = calculate_temperature_statistics(temp_profiles)
 
+    # Costo eléctrico de los servidores (constante por simulación)
+    servidor_kwh = (PARAMS_FISICOS['Q_servers'] * 744) / 1000  # kWh mes
+    cost_servidores = servidor_kwh * PARAMS_FISICOS['costo_kWh']
+    costs_servers = [cost_servidores] * num_simulations
+    server_stats = calculate_cost_statistics(costs_servers)
+
     # Generar datos para los gráficos
     randomization_data = get_randomization_diagnostic_data(temp_profiles)
     hourly_temp_data = get_hourly_temperature_distribution_data(temp_stats)
     cop_curves_data = get_cop_curves_data()
+    
+    # Nuevos gráficos educativos
+    energy_consumption_data = get_energy_consumption_data(temp_profiles)
+    control_efficiency_data = get_control_efficiency_data(temp_profiles)
+    cost_breakdown_data = get_cost_breakdown_data(costs, costs_servers)
 
     # Generar datos horarios para el heatmap
     hourly_temps = []
@@ -426,12 +525,6 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     if 'cop_curve' in modelo_info_serializable:
         del modelo_info_serializable['cop_curve']
 
-    # Costo eléctrico de los servidores (constante por simulación)
-    servidor_kwh = (PARAMS_FISICOS['Q_servers'] * 744) / 1000  # kWh mes
-    cost_servidores = servidor_kwh * PARAMS_FISICOS['costo_kWh']
-    costs_servers = [cost_servidores] * num_simulations
-    server_stats = calculate_cost_statistics(costs_servers)
-
     simulation_results = {
         'hourly_temps': hourly_temps,
         'costs': costs,
@@ -439,6 +532,9 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'randomization_data': randomization_data,
         'hourly_temp_data': hourly_temp_data,
         'cop_curves_data': cop_curves_data,
+        'energy_consumption_data': energy_consumption_data,
+        'control_efficiency_data': control_efficiency_data,
+        'cost_breakdown_data': cost_breakdown_data,
         'simulation_time': round(time.time() - start_time, 2),
         'modelo_refrigeracion': modelo_info_serializable,
         'status': 'complete',
@@ -454,7 +550,12 @@ def index():
         'temperature_distribution': 'Este gráfico muestra la distribución de temperaturas horarias durante el mes de enero. La curva representa la temperatura media para cada hora del día, permitiendo identificar los momentos más fríos y cálidos.',
         'cost_monthly': 'Este histograma muestra la distribución de probabilidad del costo mensual de energía del sistema completo (servidores + HVAC) para el mes de enero. La línea roja indica el costo promedio, mientras que la línea púrpura muestra el Costo90 (valor no superado con el 90% de probabilidad).',
         'randomization': 'Este gráfico valida científicamente la calidad de la randomización utilizada en las simulaciones de Monte Carlo, mostrando que las temperaturas generadas siguen distribuciones normales y pasan pruebas estadísticas de normalidad (Q-Q plots).',
-        'cop_curves': 'Este gráfico muestra las curvas de Coeficiente de Rendimiento (COP) para diferentes modelos de equipos de refrigeración. El COP indica cuánta energía de refrigeración se produce por cada unidad de energía eléctrica consumida. Un COP más alto significa mayor eficiencia.'
+        'cop_curves': 'Este gráfico muestra las curvas de Coeficiente de Rendimiento (COP) para diferentes modelos de equipos de refrigeración. El COP indica cuánta energía de refrigeración se produce por cada unidad de energía eléctrica consumida. Un COP más alto significa mayor eficiencia.',
+        'daily_max_temp': 'Este gráfico muestra la temperatura máxima diaria promedio de la sala de servidores durante el mes. Permite identificar patrones de comportamiento térmico y verificar que el sistema de control mantiene las temperaturas dentro de rangos seguros (típicamente 18-26°C para centros de datos).',
+        'energy_consumption': 'Gráfico que muestra el consumo energético acumulado del sistema HVAC a lo largo del tiempo, permitiendo identificar períodos de mayor demanda energética y la eficiencia del sistema de control.',
+        'temperature_vs_ambient': 'Correlación entre la temperatura exterior y la temperatura interior de la sala, mostrando cómo las condiciones climáticas afectan el rendimiento del sistema de refrigeración.',
+        'control_efficiency': 'Análisis de la eficiencia del sistema de control, mostrando qué porcentaje del tiempo el HVAC está activo y cómo responde a las variaciones de temperatura.',
+        'cost_breakdown': 'Desglose detallado de los costos operativos, separando el consumo de los servidores del consumo del sistema HVAC, fundamental para análisis económicos.'
     }
     
     # Modelos de refrigeración disponibles

@@ -396,6 +396,11 @@ function updateAllCharts(data) {
     if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'Mensual', data.cost_stats);
     if (data.costs_servers) updateCostHistogram('server-cost-histogram', data.costs_servers, 'Servidores', data.server_stats);
     if (data.daily_max_avg) renderDailyMaxChart(data.daily_max_avg);
+    
+    // Nuevos gráficos educativos
+    if (data.energy_consumption_data) renderEnergyConsumptionChart(data.energy_consumption_data);
+    if (data.control_efficiency_data) renderControlEfficiencyChart(data.control_efficiency_data);
+    if (data.cost_breakdown_data) renderCostBreakdownChart(data.cost_breakdown_data);
 
     document.querySelectorAll('.expand-chart-btn').forEach(button => {
         button.onclick = () => openChartInModal(button.dataset.chartCanvas);
@@ -800,4 +805,188 @@ function openChartInModal(canvasId) {
 
     chartInstances.modal = new Chart(modalCtx, modalConfig);
     modal.style.display = 'block';
+}
+
+// --- Nuevos gráficos educativos ---
+
+function renderEnergyConsumptionChart(data) {
+    const canvasId = 'energy-consumption-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: data.time_hours.map(h => `${Math.floor(h)}h`),
+            datasets: [{
+                label: 'Consumo Acumulado (kWh)',
+                data: data.energy_cumulative,
+                borderColor: 'rgba(255, 159, 64, 1)',
+                backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            ...defaultChartOptions,
+            plugins: {
+                ...defaultChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: 'Consumo Energético del HVAC a lo Largo del Tiempo'
+                }
+            }
+        }
+    });
+}
+
+function renderTemperatureCorrelationChart(data) {
+    const canvasId = 'temp-correlation-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const scatterData = data.ambient_temps.map((temp, i) => ({
+        x: temp,
+        y: data.room_temps[i]
+    }));
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Temp. Interior vs Exterior',
+                data: scatterData,
+                backgroundColor: 'rgba(153, 102, 255, 0.6)',
+                borderColor: 'rgba(153, 102, 255, 1)'
+            }]
+        },
+        options: {
+            ...defaultChartOptions,
+            plugins: {
+                ...defaultChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: 'Correlación Temperatura Interior vs Exterior'
+                }
+            },
+            scales: {
+                x: {
+                    ...defaultChartOptions.scales.x,
+                    title: {
+                        display: true,
+                        text: 'Temperatura Exterior (°C)'
+                    }
+                },
+                y: {
+                    ...defaultChartOptions.scales.y,
+                    title: {
+                        display: true,
+                        text: 'Temperatura Interior (°C)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderControlEfficiencyChart(data) {
+    const canvasId = 'control-efficiency-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const hourLabels = data.hours.map(h => `${h}:00`);
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+            labels: hourLabels,
+            datasets: [{
+                label: 'HVAC Activo (%)',
+                data: data.hvac_active,
+                backgroundColor: 'rgba(255, 206, 86, 0.6)',
+                borderColor: 'rgba(255, 206, 86, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            ...defaultChartOptions,
+            plugins: {
+                ...defaultChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: `Actividad del HVAC por Hora (Eficiencia: ${data.efficiency_score}%)`
+                }
+            },
+            scales: {
+                ...defaultChartOptions.scales,
+                y: {
+                    ...defaultChartOptions.scales.y,
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Porcentaje de Tiempo Activo'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderCostBreakdownChart(data) {
+    const canvasId = 'cost-breakdown-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['HVAC', 'Servidores'],
+            datasets: [{
+                data: [data.hvac_mean, data.server_mean],
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 99, 132, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            ...defaultChartOptions,
+            plugins: {
+                ...defaultChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: `Desglose de Costos Mensuales (Total: $${data.total_mean.toFixed(2)})`
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed;
+                            const percentage = context.dataset.label === 'HVAC' ? 
+                                data.hvac_percentage : data.server_percentage;
+                            return `${label}: $${value.toFixed(2)} (${percentage.toFixed(1)}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
 } 

@@ -123,6 +123,12 @@
                         <button class="expand-chart-btn" data-chart-canvas="daily-max-chart">
                             <i class="fas fa-expand-arrows-alt"></i>
                         </button>
+                        <div class="explanation-trigger" data-target="daily-max-temp-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="daily-max-temp-explanation" class="explanation-text">
+                            {{ explanations.daily_max_temp }}
+                        </div>
                     </div>
                 </div>
                 
@@ -154,6 +160,56 @@
                         </div>
                         <div id="cost-server-explanation" class="explanation-text">
                             Costo mensual de la energía consumida exclusivamente por los servidores.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="result-card">
+                    <h3>Consumo Energético Acumulado</h3>
+                    <div class="chart-container">
+                        <canvas id="energy-consumption-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="energy-consumption-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <div class="explanation-trigger" data-target="energy-consumption-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="energy-consumption-explanation" class="explanation-text">
+                            {{ explanations.energy_consumption }}
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="result-card">
+                    <h3>Eficiencia del Control HVAC</h3>
+                    <div class="chart-container">
+                        <canvas id="control-efficiency-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="control-efficiency-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <div class="explanation-trigger" data-target="control-efficiency-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="control-efficiency-explanation" class="explanation-text">
+                            {{ explanations.control_efficiency }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="result-card">
+                    <h3>Desglose de Costos Operativos</h3>
+                    <div class="chart-container">
+                        <canvas id="cost-breakdown-chart"></canvas>
+                        <button class="expand-chart-btn" data-chart-canvas="cost-breakdown-chart">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <div class="explanation-trigger" data-target="cost-breakdown-explanation">
+                            <span class="info-icon">i</span>
+                        </div>
+                        <div id="cost-breakdown-explanation" class="explanation-text">
+                            {{ explanations.cost_breakdown }}
                         </div>
                     </div>
                 </div>
