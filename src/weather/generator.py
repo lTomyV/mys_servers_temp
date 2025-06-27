@@ -3,7 +3,6 @@ Módulo para generación de perfiles climáticos y de temperatura.
 """
 
 import numpy as np
-from scipy.stats import truncnorm
 from config.settings import (
     TMIN_MEDIAN, TMAX_MEDIAN, TMIN_SIGMA, TMAX_SIGMA,
     TMIN_HOUR, TMIN_HOUR_SIGMA, TMAX_HOUR, TMAX_HOUR_SIGMA
@@ -12,28 +11,25 @@ from config.settings import (
 
 def generate_weather_profile():
     """Genera un perfil de 31 días de temperaturas con variación horaria."""
-    # Generar temperaturas diarias
+    # Generar temperaturas diarias con distribución gaussiana
+    # Centradas en las medianas con las desviaciones especificadas
     t_min_daily = np.random.normal(TMIN_MEDIAN, TMIN_SIGMA, 31)
     t_max_daily = np.random.normal(TMAX_MEDIAN, TMAX_SIGMA, 31)
     
-    # Generar horarios de extremos con distribución normal truncada
-    # Para hora mínima: 6am ± 30 min = rango [5.5, 6.5] con distribución normal centrada en 6
-    # Usar sigma = 0.25 para buena concentración en el centro
-    sigma_min = 0.25
-    a_min = (TMIN_HOUR - TMIN_HOUR_SIGMA - TMIN_HOUR) / sigma_min
-    b_min = (TMIN_HOUR + TMIN_HOUR_SIGMA - TMIN_HOUR) / sigma_min
-    hour_min_daily = truncnorm.rvs(a_min, b_min, loc=TMIN_HOUR, scale=sigma_min, size=31)
+    # Aplicar rangos específicos a las temperaturas
+    # Mínimas: 16°C - 25°C
+    t_min_daily = np.clip(t_min_daily, 16.0, 25.0)
+    # Máximas: 30°C - 42°C  
+    t_max_daily = np.clip(t_max_daily, 30.0, 42.0)
     
-    # Para hora máxima: 4pm ± 1 hora = rango [15, 17] con distribución normal centrada en 16
-    # Usar sigma = 0.4 para que 99.7% esté dentro del rango ±1h (3 sigmas)
-    sigma_max = 0.4
-    a_max = (TMAX_HOUR - TMAX_HOUR_SIGMA - TMAX_HOUR) / sigma_max
-    b_max = (TMAX_HOUR + TMAX_HOUR_SIGMA - TMAX_HOUR) / sigma_max
-    hour_max_daily = truncnorm.rvs(a_max, b_max, loc=TMAX_HOUR, scale=sigma_max, size=31)
+    # Generar horarios de extremos con distribución gaussiana
+    # Para hora mínima: 6am, rango 5.5-6.5
+    hour_min_daily = np.random.normal(TMIN_HOUR, TMIN_HOUR_SIGMA, 31)
+    hour_min_daily = np.clip(hour_min_daily, 5.5, 6.5)
     
-    # Asegurar que los horarios estén en rango válido (por si acaso)
-    hour_min_daily = np.clip(hour_min_daily, 0, 23.99)
-    hour_max_daily = np.clip(hour_max_daily, 0, 23.99)
+    # Para hora máxima: 4pm, rango 15-17  
+    hour_max_daily = np.random.normal(TMAX_HOUR, TMAX_HOUR_SIGMA, 31)
+    hour_max_daily = np.clip(hour_max_daily, 15.0, 17.0)
     
     return t_min_daily, t_max_daily, hour_min_daily, hour_max_daily
 

@@ -258,3 +258,188 @@ def plot_randomization_diagnostic(temperature_profiles, temp_stats):
     _finish_plot()
     
     print(">> Grafico de validacion de randomizacion generado: graphs/diagnostico_randomizacion.png")
+
+
+def plot_adaptive_performance(temperature_profiles, costs):
+    """
+    Genera gráficos de rendimiento del control adaptativo.
+    
+    Args:
+        temperature_profiles: Lista de perfiles de temperatura
+        costs: Array de costos de las simulaciones
+    """
+    if not temperature_profiles:
+        print("⚠️  No hay datos de temperatura para graficar rendimiento adaptativo")
+        return
+    
+    # Crear figura con subplots
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    
+    # Convertir datos a arrays numpy
+    temp_data = np.array(temperature_profiles)
+    
+    # 1. Distribución de temperaturas máximas por simulación
+    max_temps = np.max(temp_data, axis=1)
+    axes[0, 0].hist(max_temps, bins=20, alpha=0.7, color='orange', edgecolor='black')
+    axes[0, 0].axvline(25, color='red', linestyle='--', linewidth=2, label='Límite 25°C')
+    axes[0, 0].set_xlabel('Temperatura Máxima (°C)')
+    axes[0, 0].set_ylabel('Frecuencia')
+    axes[0, 0].set_title('Distribución de Temperaturas Máximas')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # 2. Relación temperatura máxima vs costo
+    axes[0, 1].scatter(max_temps, costs, alpha=0.6, color='blue')
+    axes[0, 1].set_xlabel('Temperatura Máxima (°C)')
+    axes[0, 1].set_ylabel('Costo Mensual ($)')
+    axes[0, 1].set_title('Temperatura Máxima vs Costo')
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Agregar línea de tendencia
+    z = np.polyfit(max_temps, costs, 1)
+    p = np.poly1d(z)
+    axes[0, 1].plot(max_temps, p(max_temps), "r--", alpha=0.8, label=f'Tendencia (R²={np.corrcoef(max_temps, costs)[0,1]**2:.3f})')
+    axes[0, 1].legend()
+    
+    # 3. Evolución temporal promedio
+    temp_promedio = np.mean(temp_data, axis=0)
+    horas = np.arange(len(temp_promedio))
+    axes[1, 0].plot(horas, temp_promedio, 'b-', linewidth=2, label='Temperatura Promedio')
+    axes[1, 0].axhline(25, color='red', linestyle='--', alpha=0.7, label='Límite 25°C')
+    axes[1, 0].axhline(15, color='green', linestyle='--', alpha=0.7, label='Mínimo Control (15°C)')
+    axes[1, 0].set_xlabel('Hora')
+    axes[1, 0].set_ylabel('Temperatura (°C)')
+    axes[1, 0].set_title('Evolución Temporal Promedio')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # 4. Cumplimiento del objetivo por hora del día
+    # Reorganizar por hora del día (asumiendo datos horarios para 31 días)
+    if len(temp_promedio) >= 24:  # Al menos un día completo
+        horas_dia = len(temp_promedio) % 744  # 744 horas en 31 días
+        if horas_dia == 0:  # Datos completos
+            temp_reshaped = temp_data.reshape(temp_data.shape[0], 31, 24)
+            cumplimiento_horario = np.mean(temp_reshaped <= 25.0, axis=(0, 1)) * 100
+            
+            horas_del_dia = np.arange(24)
+            axes[1, 1].bar(horas_del_dia, cumplimiento_horario, alpha=0.7, color='green', edgecolor='black')
+            axes[1, 1].axhline(95, color='red', linestyle='--', alpha=0.7, label='Objetivo 95%')
+            axes[1, 1].set_xlabel('Hora del Día')
+            axes[1, 1].set_ylabel('Cumplimiento (%)')
+            axes[1, 1].set_title('Cumplimiento del Objetivo por Hora')
+            axes[1, 1].set_ylim(0, 105)
+            axes[1, 1].legend()
+            axes[1, 1].grid(True, alpha=0.3)
+        else:
+            axes[1, 1].text(0.5, 0.5, 'Datos insuficientes\npara análisis horario', 
+                           ha='center', va='center', transform=axes[1, 1].transAxes,
+                           fontsize=12, bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
+            axes[1, 1].set_title('Análisis Horario')
+    
+    plt.tight_layout()
+    plt.savefig(_get_graph_path('rendimiento_adaptativo.png'), dpi=DPI, bbox_inches='tight')
+    _finish_plot()
+    
+    print(f"✅ Gráfico de rendimiento guardado: graphs/rendimiento_adaptativo.png")
+
+def plot_system_performance_timeline(datos_detallados):
+    """Crea un gráfico de líneas temporales mostrando temperaturas, potencia y COP del sistema."""
+    if not datos_detallados:
+        print("No hay datos detallados disponibles para el gráfico de línea temporal.")
+        return
+    
+    # Usar los datos de la primera simulación para el gráfico
+    datos = datos_detallados[0]
+    
+    tiempo_horas = datos['tiempo_horas']
+    T_exterior = datos['T_exterior']
+    T_servidor = datos['T_servidor'] 
+    P_refrigeracion = datos['P_refrigeracion']
+    COP_real = datos.get('COP_real', None)  # Puede no estar disponible en versiones anteriores
+    
+    # Crear figura con subplots
+    if COP_real is not None:
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    
+    # Gráfico superior: Temperaturas
+    ax1.plot(tiempo_horas, T_exterior, 'orange', linewidth=2, label='Temperatura Exterior', alpha=0.8)
+    ax1.plot(tiempo_horas, T_servidor, 'red', linewidth=2, label='Temperatura Carcasa Servidor')
+    
+    # Línea de referencia del objetivo (25°C)
+    ax1.axhline(y=25, color='red', linestyle='--', alpha=0.7, label='Objetivo ≤ 25°C')
+    
+    ax1.set_ylabel('Temperatura (°C)', fontsize=12)
+    ax1.set_title('Rendimiento del Sistema de Refrigeración con COP Variable - Análisis Temporal', fontsize=14, fontweight='bold')
+    ax1.legend(loc='upper left')
+    ax1.grid(True, alpha=0.3)
+    
+    # Colorear fondo según cumplimiento del objetivo
+    ax1.fill_between(tiempo_horas, 0, 50, where=(np.array(T_servidor) > 25), 
+                     color='red', alpha=0.1, label='Fuera del objetivo')
+    ax1.fill_between(tiempo_horas, 0, 50, where=(np.array(T_servidor) <= 25), 
+                     color='green', alpha=0.1, label='Dentro del objetivo')
+    
+    # Gráfico medio: Potencia de refrigeración
+    ax2.plot(tiempo_horas, P_refrigeracion, 'blue', linewidth=2, label='Potencia de Refrigeración')
+    ax2.fill_between(tiempo_horas, 0, P_refrigeracion, alpha=0.3, color='blue')
+    
+    ax2.set_ylabel('Potencia (W)', fontsize=12)
+    ax2.legend(loc='upper left')
+    ax2.grid(True, alpha=0.3)
+    
+    # Gráfico inferior: COP variable (si está disponible)
+    if COP_real is not None:
+        ax3.plot(tiempo_horas, COP_real, 'green', linewidth=2, label='COP Real')
+        ax3.fill_between(tiempo_horas, 0, COP_real, alpha=0.3, color='green')
+        
+        ax3.set_ylabel('COP', fontsize=12)
+        ax3.set_xlabel('Tiempo (horas)', fontsize=12)
+        ax3.legend(loc='upper left')
+        ax3.grid(True, alpha=0.3)
+        
+        # Configurar etiquetas del eje X
+        ax_bottom = ax3
+    else:
+        ax2.set_xlabel('Tiempo (horas)', fontsize=12)
+        ax_bottom = ax2
+    
+    # Configurar etiquetas del eje X para mostrar días
+    max_hours = max(tiempo_horas)
+    if max_hours > 48:  # Si es más de 2 días
+        # Mostrar marcas cada 24 horas (cada día)
+        day_ticks = np.arange(0, max_hours + 1, 24)
+        ax_bottom.set_xticks(day_ticks)
+        ax_bottom.set_xticklabels([f'Día {int(h/24 + 1)}' for h in day_ticks])
+    else:
+        # Para simulaciones cortas, mostrar cada 6 horas
+        ax_bottom.set_xticks(np.arange(0, max_hours + 1, 6))
+    
+    # Agregar información estadística como texto
+    T_servidor_arr = np.array(T_servidor)
+    horas_fuera_objetivo = np.sum(T_servidor_arr > 25)
+    porcentaje_cumplimiento = (1 - horas_fuera_objetivo / len(T_servidor_arr)) * 100
+    
+    if COP_real is not None:
+        cop_info = f"• COP promedio: {np.mean(COP_real):.2f}\n• COP mínimo: {np.min(COP_real):.2f}\n"
+    else:
+        cop_info = ""
+    
+    info_text = f"""Estadísticas del Período:
+• Temp. servidor máx: {np.max(T_servidor):.1f}°C
+• Temp. servidor prom: {np.mean(T_servidor):.1f}°C  
+• Cumplimiento objetivo: {porcentaje_cumplimiento:.1f}%
+• Potencia prom: {np.mean(P_refrigeracion):.0f}W
+• Potencia máx: {np.max(P_refrigeracion):.0f}W
+{cop_info}• Equipo: {datos.get('equipo_info', {}).get('nombre', 'No especificado')}"""
+    
+    ax1.text(0.02, 0.98, info_text, transform=ax1.transAxes, 
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8),
+             verticalalignment='top', fontsize=10, fontfamily='monospace')
+    
+    plt.tight_layout()
+    plt.savefig(_get_graph_path('rendimiento_sistema_temporal.png'), dpi=DPI, bbox_inches='tight')
+    _finish_plot()
+    
+    print(f"📊 Gráfico temporal guardado: graphs/rendimiento_sistema_temporal.png")
