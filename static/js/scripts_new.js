@@ -395,6 +395,7 @@ function updateAllCharts(data) {
     if (data.hourly_temp_data) renderHourlyTempChart(data.hourly_temp_data);
     if (data.costs) updateCostHistogram('cost-histogram', data.costs, 'Mensual', data.cost_stats);
     if (data.costs_servers) updateCostHistogram('server-cost-histogram', data.costs_servers, 'Servidores', data.server_stats);
+    if (data.daily_max_avg) renderDailyMaxChart(data.daily_max_avg);
 
     document.querySelectorAll('.expand-chart-btn').forEach(button => {
         button.onclick = () => openChartInModal(button.dataset.chartCanvas);
@@ -591,30 +592,32 @@ function updateCostHistogram(canvasId, costs, label, stats) {
     const chartCtx = ctx.getContext('2d');
     if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
     
-    // Crear bins para el histograma
     const min = Math.min(...costs);
     const max = Math.max(...costs);
-    // Evitar bins de ancho cero cuando todos los costos son iguales
-    const adjustedMin = (min === max) ? min - 0.01 : min;
-    const adjustedMax = (min === max) ? max + 0.01 : max;
-    const binCount = 15;
-    const binWidth = (adjustedMax - adjustedMin) / binCount;
-    
-    const bins = Array(binCount).fill(0);
-    const labels = [];
-    
-    // Crear etiquetas para los bins
-    for (let i = 0; i < binCount; i++) {
-        const binStart = adjustedMin + i * binWidth;
-        const binEnd = binStart + binWidth;
-        labels.push(`$${binStart.toFixed(2)}-$${binEnd.toFixed(2)}`);
+
+    let labels = [];
+    let bins = [];
+
+    if (min === max) {
+        // Todos los valores son iguales: mostrar una sola barra
+        labels = [`$${min.toFixed(2)}`];
+        bins = [costs.length];
+    } else {
+        const binCount = 15;
+        const adjustedMin = min;
+        const adjustedMax = max;
+        const binWidth = (adjustedMax - adjustedMin) / binCount;
+        bins = Array(binCount).fill(0);
+        for (let i = 0; i < binCount; i++) {
+            const binStart = adjustedMin + i * binWidth;
+            const binEnd = binStart + binWidth;
+            labels.push(`$${binStart.toFixed(2)}-$${binEnd.toFixed(2)}`);
+        }
+        costs.forEach(value => {
+            const binIndex = Math.min(Math.floor((value - adjustedMin) / binWidth), binCount - 1);
+            bins[binIndex]++;
+        });
     }
-    
-    // Contar valores en cada bin
-    costs.forEach(value => {
-        const binIndex = Math.min(Math.floor((value - adjustedMin) / binWidth), binCount - 1);
-        bins[binIndex]++;
-    });
     
     const options = {
         ...defaultChartOptions,
@@ -669,6 +672,33 @@ function updateCostHistogram(canvasId, costs, label, stats) {
             }]
         },
         options: options
+    });
+}
+
+function renderDailyMaxChart(series) {
+    const canvasId = 'daily-max-chart';
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const chartCtx = ctx.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+    const labels = Array.from({length: 31}, (_, i) => `Día ${i+1}`);
+
+    chartInstances[canvasId] = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'T interior máxima (°C)',
+                data: series,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: defaultChartOptions
     });
 }
 

@@ -24,11 +24,11 @@ app = Flask(__name__)
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 def _load_hourly_temps(path):
-    """Lee un JSON Open-Meteo y devuelve np.array(744) en Kelvin."""
+    """Lee un JSON Open-Meteo y devuelve np.array(744) en Celsius."""
     with open(path, 'r', encoding='utf-8') as f:
         j = json.load(f)
     temps_c = np.array(j['hourly']['temperature_2m'], dtype=float)
-    return temps_c + 273.15
+    return temps_c  # Mantener en Celsius
 
 # Cargar todas las series disponibles
 HOURLY_TEMPS_SERIES = []
@@ -51,7 +51,7 @@ PARAMS_FISICOS = {
     'U': 5.5,  # Coeficiente de transferencia de calor (W/m^2.K)
     'Q_servers': 45000,  # Carga térmica de los servidores (W)
     'C_th': 2_000_000,  # Capacidad térmica realista de la sala (J/K)
-    'Q_max_cooling': 30000,  # Potencia máxima del HVAC (W)
+    'Q_max_cooling': 60000,  # Potencia máxima del HVAC (W)
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
 }
 
@@ -69,7 +69,7 @@ MODELOS_REFRIGERACION = {
     'economico': {
         'nombre': 'Economico (Estándar)',
         'cop_nominal': 2.8,  # COP a 35°C exterior
-        'potencia_nominal': 15000,  # W
+        'potencia_nominal': 60000,  # W
         'precio': 2500,  # USD
         'vida_util': 8,  # años
         'mantenimiento_anual': 200,  # USD/año
@@ -79,7 +79,7 @@ MODELOS_REFRIGERACION = {
     'eficiente': {
         'nombre': 'Eficiente (Inverter)',
         'cop_nominal': 3.2,  # COP a 35°C exterior
-        'potencia_nominal': 15000,  # W
+        'potencia_nominal': 60000,  # W
         'precio': 4200,  # USD
         'vida_util': 12,  # años
         'mantenimiento_anual': 150,  # USD/año
@@ -88,7 +88,7 @@ MODELOS_REFRIGERACION = {
     'premium': {
         'nombre': 'Premium (VRF)',
         'cop_nominal': 3.8,  # COP a 35°C exterior
-        'potencia_nominal': 15000,  # W
+        'potencia_nominal': 60000,  # W
         'precio': 6800,  # USD
         'vida_util': 15,  # años
         'mantenimiento_anual': 120,  # USD/año
@@ -129,11 +129,15 @@ def run_single_simulation(args):
         hourly_series = _get_random_hourly_series()
     
     t_final = 31 * 86400
-    y0 = [297.15, 0]  # 24°C, 0 kWh
+    y0 = [24.0, 0]  # 24°C, 0 kWh
     t_eval = np.arange(0, t_final, 3600)
     
+    # Ajustar capacidad de refrigeración al modelo de equipo
+    local_params = fisico_params.copy()
+    local_params['Q_max_cooling'] = MODELOS_REFRIGERACION[modelo_refrigeracion]['potencia_nominal']
+    
     sol = solve_ivp(
-        lambda t, y: modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, fisico_params, hourly_series),
+        lambda t, y: modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, modelo_refrigeracion, local_params, hourly_series),
         [0, t_final],
         y0,
         t_eval=t_eval,
@@ -144,8 +148,8 @@ def run_single_simulation(args):
     
     T_room_profile = sol.y[0]
     energia_total = sol.y[1][-1]
-    total_energia = energia_total + fisico_params['Q_servers'] * t_final
-    costo = (total_energia / 3.6e6) * fisico_params['costo_kWh']
+    total_energia = energia_total + local_params['Q_servers'] * t_final
+    costo = (total_energia / 3.6e6) * local_params['costo_kWh']
     
     temp_profile_data = {
         'tiempo': sol.t.tolist(),
@@ -191,22 +195,24 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     # Lógica de control según estrategia
     if estrategia == 'LineaBase':
         # Estrategia de termostato simple
-        if T_room > (24 + 273.15):
+        if T_room > 24.0:
             Q_cooling = params_fisicos['Q_max_cooling']
         else:
             Q_cooling = 0
     else:  # Optimizado
         # Estrategia de pre-enfriamiento con banda muerta
-        T_setpoint_inferior = 22 + 273.15
-        T_setpoint_superior = 26 + 273.15
-        
+        T_setpoint_normal = 24.0
+        T_setpoint_precool = 21.0
+
         # Calcular COP actual
-        cop_actual = calcular_cop(T_ambient - 273.15, modelo_refrigeracion)
-        
-        if T_room > T_setpoint_superior:
+        cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
+
+        # Siempre enfriar si superamos el setpoint normal (límite estricto)
+        if T_room > T_setpoint_normal:
             Q_cooling = params_fisicos['Q_max_cooling']
-        elif T_room > T_setpoint_inferior and cop_actual > 3.0:
-            Q_cooling = params_fisicos['Q_max_cooling']  # Enfriar solo si es eficiente
+        # Si estamos por debajo del límite, pre-enfriamos solo si es muy eficiente
+        elif T_room > T_setpoint_precool and cop_actual > 3.5:
+            Q_cooling = params_fisicos['Q_max_cooling']  # Enfriar solo si es muy eficiente
         else:
             Q_cooling = 0
     
@@ -214,7 +220,7 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     dT_room_dt = (params_fisicos['Q_servers'] + Q_transmission - Q_cooling) / params_fisicos['C_th']
     
     # Calcular potencia eléctrica consumida
-    cop = calcular_cop(T_ambient - 273.15, modelo_refrigeracion)
+    cop = calcular_cop(T_ambient, modelo_refrigeracion)
     P_electric = Q_cooling / max(cop, 1e-6) if Q_cooling > 1e-6 else 0
     
     # Derivada de la energía total
@@ -271,7 +277,7 @@ def generate_weather_profile():
         return np.array(t_min_profile), np.array(t_max_profile)
 
     # Fallback estocástico si no hay datos reales
-    t_min_profile = np.random.normal(PARAMS_CLIMA['TMIN_MU'], PARAMS_CLIMA['TMIN_SIGMA'], 31) + 273.15
+    t_min_profile = np.random.normal(PARAMS_CLIMA['TMIN_MU'], PARAMS_CLIMA['TMIN_SIGMA'], 31)
     delta_t_profile = np.random.normal(PARAMS_CLIMA['DELTAT_MU'], PARAMS_CLIMA['DELTAT_SIGMA'], 31)
     delta_t_profile = np.clip(delta_t_profile, 6, 15)  # acotar a rango físico
     t_max_profile = t_min_profile + delta_t_profile
@@ -299,7 +305,7 @@ def calculate_temperature_statistics(temp_profiles):
     for profile in temp_profiles:
         for i, t in enumerate(profile['tiempo']):
             hour = int((t % 86400) / 3600)
-            temp = profile['T_room'][i] - 273.15  # Convertir a Celsius
+            temp = profile['T_room'][i]  # Ya están en Celsius
             all_temps.append(temp)
             hourly_temps[hour].append(temp)
     
@@ -330,8 +336,8 @@ def get_randomization_diagnostic_data(temp_profiles):
         t_mins.extend(profile['T_min'])
         t_maxs.extend(profile['T_max'])
     
-    t_mins_c = (np.array(t_mins) - 273.15).tolist()
-    t_maxs_c = (np.array(t_maxs) - 273.15).tolist()
+    t_mins_c = np.array(t_mins).tolist()  # Ya están en Celsius
+    t_maxs_c = np.array(t_maxs).tolist()  # Ya están en Celsius
     
     return {'t_mins': t_mins_c, 't_maxs': t_maxs_c}
 
@@ -396,8 +402,23 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
                 profile = temp_profiles[profile_idx]
                 idx = day * 24 + hour
                 if idx < len(profile['tiempo']):
-                    temp = profile['T_room'][idx] - 273.15
+                    temp = profile['T_room'][idx]  # Ya están en Celsius
                     hourly_temps.append({'day': day + 1, 'hour': hour, 'temperature': round(temp, 2)})
+
+    # --- Temperatura máxima diaria promedio ---
+    daily_max_matrix = []
+    for profile in temp_profiles:
+        day_max = []
+        for d in range(31):
+            start = d * 24
+            end = start + 24
+            slice_t = np.array(profile['T_room'][start:end])  # Ya están en Celsius
+            day_max.append(float(np.max(slice_t)))
+        daily_max_matrix.append(day_max)
+    if daily_max_matrix:
+        daily_max_avg = np.mean(daily_max_matrix, axis=0).tolist()
+    else:
+        daily_max_avg = []
 
     # Preparar respuesta
 
@@ -422,7 +443,8 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'modelo_refrigeracion': modelo_info_serializable,
         'status': 'complete',
         'costs_servers': costs_servers,
-        'server_stats': server_stats
+        'server_stats': server_stats,
+        'daily_max_avg': daily_max_avg
     }
 
 @app.route('/')
