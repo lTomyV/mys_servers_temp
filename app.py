@@ -647,7 +647,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     temp_stats = calculate_temperature_statistics(temp_profiles)
 
     # Costo eléctrico de los servidores (constante por simulación)
-    servidor_kwh = (PARAMS_FISICOS['Q_servers'] * 744) / 1000  # kWh mes
+    servidor_kwh = (PARAMS_FISICOS['Q_servers'] * 744) / 1000  # kWh mes - dividido por 1000 para convertir de Wh a kWh
     cost_servidores = servidor_kwh * PARAMS_FISICOS['costo_kWh']
     costs_servers = [cost_servidores] * num_simulations
     server_stats = calculate_cost_statistics(costs_servers)
