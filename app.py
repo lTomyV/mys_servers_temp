@@ -45,12 +45,12 @@ def _get_random_hourly_series():
         return HOURLY_TEMPS_SERIES[idx]
     return None
 
-# Parámetros físicos del modelo
+# Parámetros físicos del modelo OPTIMIZADOS
 PARAMS_FISICOS = {
     'A': 126,  # Área de superficie externa (m^2)
-    'U': 5.5,  # Coeficiente de transferencia de calor (W/m^2.K)
+    'U': 4.2,  # Coeficiente de transferencia de calor mejorado (W/m^2.K) - reducido de 5.5 para mejor aislamiento
     'Q_servers': 45000,  # Carga térmica de los servidores (W)
-    'C_th': 2_000_000,  # Capacidad térmica realista de la sala (J/K)
+    'C_th': 2_500_000,  # Capacidad térmica optimizada de la sala (J/K) - aumentada para mayor inercia térmica
     'Q_max_cooling': 75000,  # Potencia máxima del HVAC (W)
     'costo_kWh': 0.13  # Costo de la energía (USD/kWh)
 }
@@ -228,30 +228,49 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     # Calor transmitido desde el exterior
     Q_transmission = params_fisicos['A'] * params_fisicos['U'] * (T_ambient - T_room)
     
-    # Estrategia de control robusta con límites estrictos para sala de servidores
-    T_setpoint_critico = 24.0  # Límite crítico absoluto
-    T_setpoint_normal = 23.0   # Límite normal de operación - subido de 22°C a 23°C
-    T_setpoint_precool = 21.5  # Inicio de pre-enfriamiento - subido de 20°C a 21.5°C
+    # NUEVO SISTEMA DE CONTROL OPTIMIZADO PARA EFICIENCIA
+    # Setpoints basados en estándares ASHRAE para datacenters (18-27°C recomendado)
+    T_setpoint_critico = 26.5   # Límite crítico absoluto (subido de 24°C a 26.5°C)
+    T_setpoint_alto = 25.5      # Límite alto normal (subido de 23°C a 25.5°C)
+    T_setpoint_objetivo = 24.0  # Temperatura objetivo óptima (subido de 22°C a 24°C)
+    T_setpoint_precool = 22.5   # Inicio de pre-enfriamiento (subido de 21.5°C a 22.5°C)
 
-    # Calcular COP actual
+    # Calcular COP actual para tomar decisiones inteligentes
     cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
 
-    # Control por niveles de temperatura - MÁS CONSERVADOR
+    # CONTROL PROPORCIONAL-INTELIGENTE (PID simplificado + lógica de eficiencia)
     if T_room > T_setpoint_critico:
         # EMERGENCIA: Temperatura crítica - HVAC al máximo
         Q_cooling = params_fisicos['Q_max_cooling']
-    elif T_room > T_setpoint_normal:
-        # ALTO: Supera límite normal - HVAC al máximo
-        Q_cooling = params_fisicos['Q_max_cooling']
+    elif T_room > T_setpoint_alto:
+        # ALTO: Control proporcional - potencia modulada según necesidad
+        # Factor de intensidad basado en qué tan lejos estamos del setpoint
+        intensidad = min(1.0, (T_room - T_setpoint_alto) / (T_setpoint_critico - T_setpoint_alto))
+        Q_cooling = params_fisicos['Q_max_cooling'] * (0.6 + 0.4 * intensidad)  # 60-100%
+    elif T_room > T_setpoint_objetivo:
+        # MEDIO: Control suave proporcional
+        intensidad = (T_room - T_setpoint_objetivo) / (T_setpoint_alto - T_setpoint_objetivo)
+        Q_cooling = params_fisicos['Q_max_cooling'] * (0.3 + 0.3 * intensidad)  # 30-60%
     elif T_room > T_setpoint_precool:
-        # MEDIO: Pre-enfriamiento MUY selectivo - solo si COP es excelente
-        if cop_actual > 3.0:  # Umbral más alto para reducir actividad innecesaria
-            Q_cooling = params_fisicos['Q_max_cooling'] * 0.7  # Potencia reducida al 70%
+        # PRE-ENFRIAMIENTO INTELIGENTE: Solo si las condiciones son MUY favorables
+        if cop_actual > 3.5:  # COP excelente (subido de 3.0 a 3.5)
+            # Control muy suave para pre-enfriamiento
+            intensidad = (T_room - T_setpoint_precool) / (T_setpoint_objetivo - T_setpoint_precool)
+            Q_cooling = params_fisicos['Q_max_cooling'] * (0.15 * intensidad)  # 0-15%
         else:
-            Q_cooling = 0
+            Q_cooling = 0  # No pre-enfriar si no es súper eficiente
     else:
         # BAJO: Temperatura óptima - HVAC apagado
         Q_cooling = 0
+    
+    # OPTIMIZACIÓN ADICIONAL: Reducir ciclos ON/OFF innecesarios
+    # Aplicar histéresis para evitar oscilaciones
+    if hasattr(modelo_sala_servidores, '_last_cooling'):
+        # Si el cambio es muy pequeño, mantener el estado anterior
+        if abs(Q_cooling - modelo_sala_servidores._last_cooling) < params_fisicos['Q_max_cooling'] * 0.05:
+            Q_cooling = modelo_sala_servidores._last_cooling
+    
+    modelo_sala_servidores._last_cooling = Q_cooling
     
     # Derivada de la temperatura
     dT_room_dt = (params_fisicos['Q_servers'] + Q_transmission - Q_cooling) / params_fisicos['C_th']
@@ -452,10 +471,14 @@ def get_energy_consumption_data(temp_profiles):
     
     for i, t in enumerate(profile['tiempo']):
         if i > 0:
-            # Estimar consumo basado en la actividad del HVAC
-            temp_diff = abs(profile['T_room'][i] - 22)  # Diferencia con temperatura objetivo
-            if temp_diff > 2:  # HVAC activo
-                power_consumption = 15  # kW aproximado
+            # Estimar consumo basado en la actividad del HVAC con nueva lógica
+            temp_room = profile['T_room'][i]
+            if temp_room > 25.5:  # HVAC activo
+                power_consumption = 20  # kW aproximado para control proporcional
+                time_step = (profile['tiempo'][i] - profile['tiempo'][i-1]) / 3600  # horas
+                cumulative += power_consumption * time_step
+            elif temp_room > 24.0:  # HVAC moderado
+                power_consumption = 12  # kW aproximado
                 time_step = (profile['tiempo'][i] - profile['tiempo'][i-1]) / 3600  # horas
                 cumulative += power_consumption * time_step
         energy_cumulative.append(cumulative)
@@ -497,7 +520,7 @@ def get_control_efficiency_data(temp_profiles):
         temp = profile['T_room'][i]
         
         # Estimar si HVAC está activo (temperatura fuera del rango óptimo)
-        if temp > 24 or temp < 21:
+        if temp > 25.5 or temp < 22.5:
             hvac_active_by_hour[hour] += 1
     
     # Normalizar a porcentaje
@@ -565,22 +588,28 @@ def get_temporal_analysis_data(temp_profiles, modelo_refrigeracion='eficiente'):
         # Calcular potencia del HVAC basada en la lógica del modelo
         T_room = temp_carcasa[i]
         
-        # Usar la misma lógica de control que en el modelo
-        T_setpoint_critico = 24.0
-        T_setpoint_normal = 23.0
-        T_setpoint_precool = 21.5
+        # Usar la misma lógica de control optimizada que en el modelo
+        T_setpoint_critico = 26.5   # Límite crítico absoluto
+        T_setpoint_alto = 25.5      # Límite alto normal
+        T_setpoint_objetivo = 24.0  # Temperatura objetivo óptima
+        T_setpoint_precool = 22.5   # Inicio de pre-enfriamiento
         
         # Calcular COP actual
         cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
         
-        # Determinar potencia de refrigeración
+        # Determinar potencia de refrigeración con control proporcional
         if T_room > T_setpoint_critico:
             Q_cooling = PARAMS_FISICOS['Q_max_cooling']
-        elif T_room > T_setpoint_normal:
-            Q_cooling = PARAMS_FISICOS['Q_max_cooling']
+        elif T_room > T_setpoint_alto:
+            intensidad = min(1.0, (T_room - T_setpoint_alto) / (T_setpoint_critico - T_setpoint_alto))
+            Q_cooling = PARAMS_FISICOS['Q_max_cooling'] * (0.6 + 0.4 * intensidad)
+        elif T_room > T_setpoint_objetivo:
+            intensidad = (T_room - T_setpoint_objetivo) / (T_setpoint_alto - T_setpoint_objetivo)
+            Q_cooling = PARAMS_FISICOS['Q_max_cooling'] * (0.3 + 0.3 * intensidad)
         elif T_room > T_setpoint_precool:
-            if cop_actual > 3.0:
-                Q_cooling = PARAMS_FISICOS['Q_max_cooling'] * 0.7
+            if cop_actual > 3.5:
+                intensidad = (T_room - T_setpoint_precool) / (T_setpoint_objetivo - T_setpoint_precool)
+                Q_cooling = PARAMS_FISICOS['Q_max_cooling'] * (0.15 * intensidad)
             else:
                 Q_cooling = 0
         else:
@@ -627,6 +656,10 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     costs_servers = [cost_servidores] * num_simulations
     server_stats = calculate_cost_statistics(costs_servers)
 
+    # Calcular costos HVAC (total - servidores)
+    costs_hvac = [c_total - cost_servidores for c_total in costs]
+    hvac_stats = calculate_cost_statistics(costs_hvac)
+
     # Generar datos para los gráficos
     randomization_data = get_randomization_diagnostic_data(temp_profiles)
     hourly_temp_data = get_hourly_temperature_distribution_data(temp_stats)
@@ -636,7 +669,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
     # Nuevos gráficos educativos
     energy_consumption_data = get_energy_consumption_data(temp_profiles)
     control_efficiency_data = get_control_efficiency_data(temp_profiles)
-    cost_breakdown_data = get_cost_breakdown_data(costs, costs_servers)
+    cost_breakdown_data = get_cost_breakdown_data(costs_hvac, costs_servers)
     temporal_analysis_data = get_temporal_analysis_data(temp_profiles, modelo_refrigeracion)
 
     # Generar datos horarios para el heatmap
@@ -676,6 +709,7 @@ def run_simulation_background(modelo_refrigeracion='eficiente'):
         'hourly_temps': hourly_temps,
         'costs': costs,
         'cost_stats': cost_stats,
+        'hvac_stats': hvac_stats,
         'randomization_data': randomization_data,
         'hourly_temp_data': hourly_temp_data,
         'ambient_temp_data': ambient_temp_data,
@@ -760,4 +794,7 @@ def get_modelos_refrigeracion():
 
 if __name__ == '__main__':
     multiprocessing.freeze_support() # Necesario para Windows
+    
+
+    
     app.run(debug=True) 
