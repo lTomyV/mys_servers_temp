@@ -995,15 +995,16 @@ function renderCostBreakdownChart(data) {
 }
 
 function renderAmbientTempChart(data) {
-    const ctx = document.getElementById('ambient-temp-chart');
+    const canvasId = 'ambient-temp-chart';
+    const ctx = document.getElementById(canvasId);
     if (!ctx) {
         console.error("No se encontró el canvas 'ambient-temp-chart'");
         return;
     }
     
     // Destruir gráfico existente si existe
-    if (chartInstances.ambientTemp) {
-        chartInstances.ambientTemp.destroy();
+    if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
     }
     
     // Crear datos del gráfico
@@ -1012,7 +1013,7 @@ function renderAmbientTempChart(data) {
         labels.push(i.toString().padStart(2, '0') + ':00');
     }
     
-    chartInstances.ambientTemp = new Chart(ctx, {
+    chartInstances[canvasId] = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,

@@ -194,13 +194,13 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
     
     # Estrategia de control robusta con límites estrictos para sala de servidores
     T_setpoint_critico = 24.0  # Límite crítico absoluto
-    T_setpoint_normal = 22.0   # Límite normal de operación
-    T_setpoint_precool = 20.0  # Inicio de pre-enfriamiento
+    T_setpoint_normal = 23.0   # Límite normal de operación - subido de 22°C a 23°C
+    T_setpoint_precool = 21.5  # Inicio de pre-enfriamiento - subido de 20°C a 21.5°C
 
     # Calcular COP actual
     cop_actual = calcular_cop(T_ambient, modelo_refrigeracion)
 
-    # Control por niveles de temperatura
+    # Control por niveles de temperatura - MÁS CONSERVADOR
     if T_room > T_setpoint_critico:
         # EMERGENCIA: Temperatura crítica - HVAC al máximo
         Q_cooling = params_fisicos['Q_max_cooling']
@@ -208,9 +208,9 @@ def modelo_sala_servidores(t, y, t_min_profile, t_max_profile, estrategia, model
         # ALTO: Supera límite normal - HVAC al máximo
         Q_cooling = params_fisicos['Q_max_cooling']
     elif T_room > T_setpoint_precool:
-        # MEDIO: Pre-enfriamiento inteligente
-        if cop_actual > 2.5:  # Umbral más bajo para mayor actividad
-            Q_cooling = params_fisicos['Q_max_cooling']
+        # MEDIO: Pre-enfriamiento MUY selectivo - solo si COP es excelente
+        if cop_actual > 3.0:  # Umbral más alto para reducir actividad innecesaria
+            Q_cooling = params_fisicos['Q_max_cooling'] * 0.7  # Potencia reducida al 70%
         else:
             Q_cooling = 0
     else:
@@ -355,21 +355,23 @@ def get_ambient_temperature_distribution_data():
     if not HOURLY_TEMPS_SERIES:
         return {'hourly_means': [], 'min_temp': 0, 'max_temp': 40}
     
-    # Tomar una muestra de series para calcular el promedio horario
+    # Tomar TODAS las series para calcular el promedio horario más representativo
     hourly_temps = [[] for _ in range(24)]
+    all_temps = []  # Para calcular min/max globales
     
-    for series in HOURLY_TEMPS_SERIES[:5]:  # Usar las primeras 5 series
+    for series in HOURLY_TEMPS_SERIES:  # Usar TODAS las series, no solo 5
         for day in range(31):  # 31 días
             for hour in range(24):
                 idx = day * 24 + hour
                 if idx < len(series):
-                    hourly_temps[hour].append(series[idx])
+                    temp = series[idx]
+                    hourly_temps[hour].append(temp)
+                    all_temps.append(temp)  # Recolectar todas las temperaturas
     
     # Calcular medias horarias
     hourly_means = [np.mean(temps) if temps else 20 for temps in hourly_temps]
     
-    # Encontrar temperaturas extremas
-    all_temps = [temp for series in HOURLY_TEMPS_SERIES[:5] for temp in series]
+    # Calcular temperaturas extremas de TODAS las series
     min_temp = min(all_temps) if all_temps else 15
     max_temp = max(all_temps) if all_temps else 35
     
